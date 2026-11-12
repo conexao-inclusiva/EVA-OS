@@ -1,0 +1,40 @@
+﻿
+Path                                                                                 LineNumber Line                                                                                       
+----                                                                                 ---------- ----                                                                                       
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\consciousness\brain.py                         66         self.event_bus.subscribe(EventType.USER_MESSAGE, self._on_user_message)            
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\consciousness\brain.py                         67         self.logger.info(f"🧠 [BRAIN] ✅ Listener registrado para {EventType.USER_MESSAGE}")
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\consciousness\brain.py                        129             ("user_manager", "src.users.user_manager", "UserManager"),                     
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\consciousness\brain.py                        192     async def _on_user_message(self, event: Event) -> None:                                
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\consciousness\brain.py                        195             self.logger.warning("[BRAIN] Evento USER_MESSAGE sem dados válidos")           
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\consciousness\consciousness_manager.py         83         self.event_bus.subscribe("user.message", self._on_user_message)                    
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\consciousness\consciousness_manager.py        143     async def _on_user_message(self, event: Event) -> None:                                
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\consciousness\consciousness_manager.py        169         await self._on_user_message(                                                       
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\consciousness\consciousness_manager.py        191             await self._on_user_message(                                                   
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\context\context_engine.py                      35         self._current_user_id = None                                                       
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\context\context_engine.py                      49         self._current_user_id = user_id                                                    
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\context\context_engine.py                     216         user_id = str(user_id or self._current_user_id or "unknown")                       
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\core\event_types.py                            12     - USER_MESSAGE: Mensagem do usuário                                                    
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\core\event_types.py                            37     USER_MESSAGE = "user.message"                                                          
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\core\event_types.py                            72     EventType.USER_MESSAGE: EventPriority.NORMAL,                                          
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\emotion\emotion_engine.py                     106         user_message = context.get("message", "") if context else ""                       
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\emotion\emotion_engine.py                     110         user_sentiment = self._detect_sentiment(user_message)                              
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\emotion\emotion_engine.py                     111         user_mood = self._classify_mood(user_message)                                      
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\emotion\emotion_engine.py                     114         tone = self._detect_tone(user_message)                                             
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\emotion\emotion_engine.py                     119             "message": user_message[:100],                                                 
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\interfaces\cli\console.py                     133             EventType.USER_MESSAGE,                                                        
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\interfaces\web\web_server.py                   69                 EventType.USER_MESSAGE,                                                    
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\interfaces\web\web_server.py                  119                     EventType.USER_MESSAGE,                                                
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\kernel\policy_engine.py                        32         # 1. IDENTIDADE CENTRAL (Quem sou eu?)                                             
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\kernel\policy_engine.py                       134 ▶ **Quem sou eu:**                                                                         
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\learning\learning_manager.py                   80         self.event_bus.subscribe("user.message", self._on_user_message)                    
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\learning\learning_manager.py                  216     async def _on_user_message(self, event: Event) -> None:                                
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\users\user_manager.py                          37         self._current_user_id: Optional[str] = None                                        
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\users\user_manager.py                          48         user_message = context.get("message", "")                                          
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\users\user_manager.py                          50         self._current_user_id = user_id                                                    
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\users\user_manager.py                          79         if self._current_user_id and self._current_user_id in self._users:                 
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\users\user_manager.py                          80             return self._users[self._current_user_id]                                      
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\users\user_manager.py                         169             "current_user": self._current_user_id,                                         
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\users\user_manager.py                         170             "active": self._current_user_id is not None                                    
+C:\Users\Alberto_Fernandes\Desktop\EVA-OS\src\users\__init__.py                               3 from src.users.user_manager import UserManager, UserProfile                                
+
+

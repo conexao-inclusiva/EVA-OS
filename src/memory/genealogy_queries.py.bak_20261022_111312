@@ -1,0 +1,68 @@
+"""Consultas genealogicas deterministicas sobre relacoes confirmadas."""
+
+import re
+import unicodedata
+
+
+def normalize(value):
+    value = unicodedata.normalize("NFKD", str(value).casefold())
+    return "".join(
+        char for char in value
+        if not unicodedata.combining(char)
+    )
+
+
+def answer_parent(question, speaker_id, family):
+    """Consulta pai/mae usando IDs, nunca comparando nomes de pessoas."""
+    normalized = normalize(question).strip(" ?!.")
+    speaker_id = str(speaker_id).strip().casefold()
+
+    match = re.fullmatch(
+        r"(?:quem e|qual e o nome d[oa]) "
+        r"(meu pai|minha mae|pai d[oa] [\\w]+|mae d[oa] [\\w]+)",
+        normalized,
+    )
+
+    if not match:
+        return None
+
+    target = match.group(1)
+
+    if target == "meu pai":
+        subject_id = speaker_id
+        relation = "pai"
+    elif target == "minha mae":
+        subject_id = speaker_id
+        relation = "mae"
+    else:
+        parts = target.split()
+        relation = parts[0]
+        subject_id = parts[-1]
+
+    if not subject_id:
+        return None
+
+    # A pessoa consultada deve existir no cadastro compartilhado.
+    person = family.get_person(subject_id)
+    if person is None:
+        return None
+
+    rows = family.relations(
+        subject_id,
+        relation,
+        confirmed_only=True,
+    )
+
+    # Relacoes singulares ambiguas nao produzem resposta.
+    if len(rows) != 1:
+        return None
+
+    parent = rows[0].get("object_name")
+    if not parent:
+        return None
+
+    return (
+        "O pai registrado e " + parent + "."
+        if relation == "pai"
+        else "A mae registrada e " + parent + "."
+    )

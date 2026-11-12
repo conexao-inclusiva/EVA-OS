@@ -1,0 +1,299 @@
+"""Gerenciador de configuraÃ§Ã£o do Kernel."""
+
+import json
+import os
+from pathlib import Path
+from typing import Any, Dict, Optional, List, Union
+from datetime import datetime
+
+
+class KernelConfig:
+    """
+    Toda configuraÃ§Ã£o da EVA passa por aqui.
+    Nunca: HOST="localhost" espalhado pelo projeto.
+    """
+    
+    # ConfiguraÃ§Ã£o padrÃ£o
+    DEFAULT_CONFIG = {
+        "system": {
+            "name": "EVA OS",
+            "version": "1.0.0",
+            "log_level": "INFO",
+            "log_file": "./data/logs/eva.log"
+        },
+        "paths": {
+            "data": "./data",
+            "models": "./models",
+            "config": "./config",
+            "plugins": "./plugins",
+            "memory": "./data/memory",
+            "knowledge": "./data/knowledge",
+            "logs": "./data/logs",
+            "backups": "./data/backups"
+        },
+        "database": {
+            "postgresql": {
+                "host": "localhost",
+                "port": 5432,
+                "database": "eva",
+                "user": "eva",
+                "password": ""
+            },
+            "qdrant": {
+                "host": "localhost",
+                "port": 6333
+            },
+            "neo4j": {
+                "host": "localhost",
+                "port": 7687,
+                "database": "eva",
+                "user": "neo4j",
+                "password": ""
+            },
+            "redis": {
+                "host": "localhost",
+                "port": 6379
+            }
+        },
+        "llm": {
+            "provider": "ollama",
+            "model": "qwen2.5:7b",
+            "code_model": "deepseek-coder:6.7b",
+            "embedding_model": "nomic-embed-text",
+            "ollama": {
+                "host": "localhost",
+                "port": 11434
+            }
+        },
+        "voice": {
+            "speech_to_text": "whisper",
+            "text_to_speech": "piper",
+            "language": "pt-BR"
+        },
+        "vision": {
+            "enable": True,
+            "model": "yolo",
+            "openvino": {
+                "host": "localhost",
+                "port": 3000
+            }
+        },
+        "network": {
+            "host": "0.0.0.0",
+            "port": 8000,
+            "api_host": "0.0.0.0",
+            "api_port": 8000
+        },
+        "security": {
+            "enable_authentication": True,
+            "enable_encryption": True,
+            "enable_audit": True
+        },
+        "home_assistant": {
+            "enable": False,
+            "host": "localhost",
+            "port": 8123,
+            "token": ""
+        },
+        "mikrotik": {
+            "enable": False,
+            "host": "192.168.88.1",
+            "port": 8728,
+            "user": "admin",
+            "password": ""
+        },
+        "resources": {
+            "max_cpu_percent": 80,
+            "max_ram_percent": 85,
+            "max_disk_percent": 90
+        },
+        "features": {
+            "auto_learning": True,
+            "auto_evolution": True,
+            "auto_programming": False
+        }
+    }
+    
+    def __init__(self, config_path: Optional[Path] = None):
+        self.config_path = config_path or Path("./config/kernel.json")
+        self._config: Dict[str, Any] = {}
+        self._loaded_at: Optional[datetime] = None
+        self._modified: bool = False
+    
+    def load(self) -> Dict[str, Any]:
+        """
+        Carrega configuraÃ§Ã£o do arquivo.
+        Se nÃ£o existir, cria com valores padrÃ£o.
+        """
+        if self.config_path.exists():
+            try:
+                with open(self.config_path, "r", encoding="utf-8") as f:
+                    self._config = json.load(f)
+                self._loaded_at = datetime.now()
+                self._modified = False
+                
+                # Mescla com defaults (para novas chaves)
+                self._merge_with_defaults()
+                
+                return self._config
+            except Exception as e:
+                print(f"Erro ao carregar configuraÃ§Ã£o: {e}")
+                self._config = self.DEFAULT_CONFIG.copy()
+                self._loaded_at = datetime.now()
+                self.save()
+                return self._config
+        else:
+            # Cria arquivo com defaults
+            self._config = self.DEFAULT_CONFIG.copy()
+            self._loaded_at = datetime.now()
+            self.save()
+            return self._config
+    
+    def _merge_with_defaults(self) -> None:
+        """Mescla configuraÃ§Ã£o atual com defaults (para novas chaves)."""
+        def deep_merge(base: dict, override: dict) -> dict:
+            result = base.copy()
+            for key, value in override.items():
+                if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                    result[key] = deep_merge(result[key], value)
+                elif key not in result:
+                    result[key] = value
+            return result
+        
+        self._config = deep_merge(self.DEFAULT_CONFIG, self._config)
+    
+    def save(self) -> None:
+        """Salva configuraÃ§Ã£o atual no arquivo."""
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            with open(self.config_path, "w", encoding="utf-8") as f:
+                json.dump(self._config, f, indent=2, ensure_ascii=False)
+            self._modified = False
+        except Exception as e:
+            print(f"Erro ao salvar configuraÃ§Ã£o: {e}")
+    
+    def reload(self) -> None:
+        """Recarrega configuraÃ§Ã£o do arquivo."""
+        self.load()
+    
+    def validate(self) -> List[str]:
+        """Valida a configuraÃ§Ã£o. Retorna lista de erros."""
+        errors = []
+        
+        # Verifica campos obrigatÃ³rios
+        required = [
+            ("system.name", "Nome do sistema nÃ£o definido"),
+            ("system.version", "VersÃ£o do sistema nÃ£o definida"),
+            ("paths.data", "Caminho de dados nÃ£o definido")
+        ]
+        
+        for key, msg in required:
+            if self.get(key) is None:
+                errors.append(msg)
+        
+        # Verifica LLM
+        llm_provider = self.get("llm.provider")
+        if llm_provider not in ["ollama", "openai", "anthropic", "local"]:
+            errors.append(f"Provedor LLM invÃ¡lido: {llm_provider}")
+        
+        # Verifica paths existem
+        for path_key in ["data", "logs", "models"]:
+            path = self.get(f"paths.{path_key}")
+            if path:
+                p = Path(path)
+                if not p.exists():
+                    try:
+                        p.mkdir(parents=True, exist_ok=True)
+                    except Exception:
+                        errors.append(f"NÃ£o foi possÃ­vel criar diretÃ³rio: {path}")
+        
+        return errors
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """
+        ObtÃ©m um valor de configuraÃ§Ã£o.
+        Suporta notaÃ§Ã£o de pontos: "system.name"
+        """
+        keys = key.split(".")
+        value = self._config
+        
+        for k in keys:
+            if isinstance(value, dict):
+                if k in value:
+                    value = value[k]
+                else:
+                    return default
+            else:
+                return default
+        
+        return value
+    
+    def set(self, key: str, value: Any) -> None:
+        """
+        Define um valor de configuraÃ§Ã£o.
+        Suporta notaÃ§Ã£o de pontos: "system.name"
+        """
+        keys = key.split(".")
+        target = self._config
+        
+        # Navega atÃ© o Ãºltimo nÃ­vel
+        for k in keys[:-1]:
+            if k not in target:
+                target[k] = {}
+            target = target[k]
+        
+        # Define o valor
+        target[keys[-1]] = value
+        self._modified = True
+    
+    def get_all(self) -> Dict[str, Any]:
+        """ObtÃ©m toda a configuraÃ§Ã£o."""
+        return self._config.copy()
+    
+    def get_section(self, section: str) -> Dict[str, Any]:
+        """ObtÃ©m uma seÃ§Ã£o da configuraÃ§Ã£o."""
+        return self._config.get(section, {})
+    
+    def is_modified(self) -> bool:
+        """Verifica se a configuraÃ§Ã£o foi modificada."""
+        return self._modified
+    
+    def get_load_time(self) -> Optional[datetime]:
+        """ObtÃ©m o horÃ¡rio de carregamento."""
+        return self._loaded_at
+    
+    def export_env(self) -> Dict[str, str]:
+        """Exporta configuraÃ§Ã£o como variÃ¡veis de ambiente."""
+        env = {}
+        
+        def flatten(obj: dict, prefix: str = "") -> None:
+            for key, value in obj.items():
+                new_key = f"{prefix}_{key}".upper() if prefix else key.upper()
+                if isinstance(value, dict):
+                    flatten(value, new_key)
+                else:
+                    env[new_key] = str(value)
+        
+        flatten(self._config)
+        return env
+    
+    def apply_env(self) -> None:
+        """Aplica variÃ¡veis de ambiente sobre a configuraÃ§Ã£o."""
+        for key, value in os.environ.items():
+            if key.startswith("EVA_"):
+                config_key = key[4:].lower().replace("_", ".")
+                try:
+                    # Tenta converter para tipo apropriado
+                    if value.lower() == "true":
+                        parsed = True
+                    elif value.lower() == "false":
+                        parsed = False
+                    elif value.isdigit():
+                        parsed = int(value)
+                    else:
+                        parsed = value
+                    
+                    self.set(config_key, parsed)
+                except Exception:
+                    pass

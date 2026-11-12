@@ -1,0 +1,658 @@
+# -*- coding: utf-8 -*-
+
+"""
+O cérebro da EVA - Pipeline Cognitivo Completo e Funcional.
+"""
+
+import asyncio
+import sys
+import os
+import importlib
+import re
+import inspect
+from typing import Dict, Any, Optional, List
+from datetime import datetime
+
+from src.kernel.events import Event, EventBus
+from src.core.event_types import EventType
+
+from src.context.context_engine import ContextEngine
+from src.core.llm_decision_gate import LLMDecisionGate
+
+
+class Brain:
+    """
+    Cérebro da EVA - Pipeline Cognitivo Completo.
+    """
+    
+    def __init__(self, event_bus: EventBus, logger, config, service_registry=None):
+        self.event_bus = event_bus
+        self.logger = logger
+        self.config = config
+        self.service_registry = service_registry
+        
+        self._running = False
+        self._llm_manager = None
+        
+        # Módulos do pipeline (serão carregados no initialize)
+        self._modules = {}
+        
+        self.context_engine = None
+        self.llm_decision_gate = None
+        
+        self._perception_queue: asyncio.Queue = asyncio.Queue()
+        self._loop_count = 0
+        self._cognitive_task = None
+        
+        # Controle de saudação por usuário (para a sessão atual)
+        self._greeting_done = {}
+        
+        self._register_listeners()
+        self.logger.info("🧠 [BRAIN] Inicializado")
+    
+    def _register_listeners(self) -> None:
+        self.logger.info("🧠 [BRAIN] Registrando listeners...")
+        self.event_bus.subscribe(EventType.USER_MESSAGE, self._on_user_message)
+        self.logger.info(f"🧠 [BRAIN] ✅ Listener registrado para {EventType.USER_MESSAGE}")
+    
+    async def initialize(self) -> None:
+        self.logger.info("🧠 [BRAIN] Inicializando...")
+        await self._load_modules()
+        
+        try:
+            self.context_engine = ContextEngine(self.event_bus, self.logger, self.config)
+            await self.context_engine.initialize()
+            self._modules["context_engine"] = self.context_engine
+            self._register_live_instance("context_engine", self.context_engine)
+            self.logger.info("✅ context_engine carregado")
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao carregar context_engine: {e}")
+            self.context_engine = None
+        
+        try:
+            self.llm_decision_gate = LLMDecisionGate(self.logger)
+            self._modules["llm_decision_gate"] = self.llm_decision_gate
+            self._register_live_instance("llm_decision_gate", self.llm_decision_gate)
+            self.logger.info("✅ llm_decision_gate carregado")
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao carregar llm_decision_gate: {e}")
+            self.llm_decision_gate = None
+        
+        if self._llm_manager:
+            self.logger.info("🧠 [BRAIN] ✅ LLM disponível")
+        else:
+            self.logger.warning("🧠 [BRAIN] ⚠️ LLM NÃO disponível")
+        
+        self._running = True
+        self._cognitive_task = asyncio.create_task(self._cognitive_loop())
+        self.logger.info("🧠 [BRAIN] Inicializado com sucesso")
+    
+    async def _load_modules(self) -> None:
+        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        if root_dir not in sys.path:
+            sys.path.insert(0, root_dir)
+            self.logger.info(f"📂 Adicionado {root_dir} ao sys.path")
+        
+        modules_to_load = [
+            ("context_manager", "src.context.context_manager", "ContextManager"),
+            ("memory_manager", "src.memory.memory_manager", "MemoryManager"),
+            ("knowledge_manager", "src.knowledge.knowledge_manager", "KnowledgeManager"),
+            ("planner_manager", "src.planner.planner_manager", "PlannerManager"),
+            ("reasoning_manager", "src.reasoning.reasoning_manager", "ReasoningManager"),
+            ("emotion_engine", "src.emotion.emotion_engine", "EmotionEngine"),
+            ("prompt_builder", "src.prompt.prompt_builder", "PromptBuilder"),
+            ("user_manager", "src.users.user_manager", "UserManager"),
+            ("long_term_memory", "src.memory.long_term_memory", "LongTermMemory"),
+            ("reminder_manager", "src.reminders.reminder_manager", "ReminderManager"),
+            ("conversation_flow", "src.context.conversation_flow", "ConversationFlow"),
+            ("family_memory", "src.memory.family_memory", "FamilyMemory"),
+            ("voice_manager", "src.voice.voice_manager", "VoiceManager"),
+            ("time_manager", "src.time.time_manager", "TimeManager"),
+            ("calendar_manager", "src.time.calendar_manager", "CalendarManager"),
+            ("weather_manager", "src.time.weather_manager", "WeatherManager"),
+            ("lunar_manager", "src.time.lunar_manager", "LunarManager"),
+            ("news_manager", "src.news.news_manager", "NewsManager"),
+        ]
+        
+        for name, module_path, class_name in modules_to_load:
+            try:
+                module = importlib.import_module(module_path)
+                class_obj = getattr(module, class_name)
+                instance = class_obj(self.event_bus, self.logger, self.config)
+                if hasattr(instance, "initialize"):
+                    result = instance.initialize()
+                    if inspect.isawaitable(result):
+                        await result
+                self._modules[name] = instance
+                self._register_live_instance(name, instance)
+                self.logger.info(f"✅ {name} carregado")
+                if name == "voice_manager":
+                    self._voice_manager = instance
+                elif name == "news_manager":
+                    instance._llm_manager = self._llm_manager
+            except Exception as e:
+                self.logger.error(f"❌ Erro ao carregar {name}: {e}")
+        
+        self.logger.info(f"📦 {len(self._modules)} módulos carregados")
+    
+    def _register_live_instance(self, name: str, instance: Any) -> None:
+        if self.service_registry is None:
+            self.logger.warning(f"🧠 [BRAIN] ServiceRegistry do Core ausente; '{name}' não registrado")
+            return
+        self.service_registry.register(name, instance)
+    
+    async def _cognitive_loop(self) -> None:
+        self.logger.info("🧠 [BRAIN] 🚀 Loop cognitivo iniciado")
+        while self._running:
+            try:
+                event = await asyncio.wait_for(self._perception_queue.get(), timeout=1.0)
+                self._loop_count += 1
+                self.logger.info(f"🧠 [BRAIN] 🔄 Loop #{self._loop_count} - Evento: {event.type}")
+                await self._process_event(event)
+            except asyncio.TimeoutError:
+                continue
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                self.logger.error(f"🧠 [BRAIN] ❌ Erro no loop: {e}")
+                await asyncio.sleep(1)
+        self.logger.info("🧠 [BRAIN] Loop finalizado")
+    
+    async def _process_event(self, event: Event) -> None:
+        """Ponto de extensão para eventos da fila; mensagens chegam pelo listener."""
+        self.logger.debug(f"[BRAIN] Evento da fila recebido: {getattr(event, 'type', None)}")
+    
+    # ===== HANDLERS =====
+    
+    async def _on_user_message(self, event: Event) -> None:
+        data = getattr(event, "data", None)
+        if not isinstance(data, dict):
+            self.logger.warning("[BRAIN] Evento USER_MESSAGE sem dados válidos")
+            return
+        text = data.get("text", "")
+        user_id = str(data.get("user") or "unknown")
+        if not isinstance(text, str) or not text.strip():
+            return
+        text = text.strip()
+        self.logger.info(f"[BRAIN] Mensagem de {user_id}: {text[:50]!r}")
+        if text.casefold() in ("stop", "eva stop"):
+            voice = self._modules.get("voice_manager")
+            if voice and hasattr(voice, "stop_listening"):
+                try:
+                    result = voice.stop_listening()
+                    if inspect.isawaitable(result):
+                        await result
+                    await self._say("Escuta desativada. Diga EVA para ativar novamente.")
+                except Exception:
+                    self.logger.exception("[BRAIN] Falha ao interromper escuta")
+            return
+        started = False
+        try:
+            await self.event_bus.publish_async(
+                EventType.PROCESSING_START,
+                {"message": text, "user": user_id, "timestamp": datetime.now().isoformat()},
+                source="brain",
+            )
+            started = True
+            response = await self._generate_response(text, user_id)
+            if not isinstance(response, str):
+                response = str(response) if response is not None else "Não consegui gerar uma resposta."
+            await self._persist_turn(user_id, text, response)
+            await self._persist_facts(user_id, text, response)
+            await self._say(response)
+            await self.event_bus.publish_async(
+                EventType.ASSISTANT_RESPONSE,
+                {"text": response, "user": user_id, "timestamp": datetime.now().isoformat()},
+                source="brain",
+            )
+        except Exception:
+            self.logger.exception("[BRAIN] Falha ao processar mensagem")
+        finally:
+            if started:
+                try:
+                    await self.event_bus.publish_async(
+                        EventType.PROCESSING_END,
+                        {"message": text, "user": user_id, "timestamp": datetime.now().isoformat()},
+                        source="brain",
+                    )
+                except Exception:
+                    self.logger.exception("[BRAIN] Falha ao publicar PROCESSING_END")
+
+    async def _say(self, text: str) -> None:
+        voice = self._modules.get("voice_manager")
+        if voice:
+            try:
+                task = voice.say(text)
+                if inspect.isawaitable(task):
+                    asyncio.create_task(task)
+            except Exception as e:
+                self.logger.error(f"Erro ao falar: {e}")
+    
+    # ===== MEMÓRIA =====
+    
+    async def _retrieve_memories(self, text: str, user_id: str, context_data: Dict) -> List[Dict]:
+        memories = []
+        try:
+            memory_manager = self._modules.get("memory_manager")
+            if memory_manager:
+                if hasattr(memory_manager, "_search_relevant_memories"):
+                    memories = memory_manager._search_relevant_memories(user_id, text) or []
+                    if inspect.isawaitable(memories):
+                        memories = await memories
+                if not memories and hasattr(memory_manager, "_get_user_history"):
+                    memories = memory_manager._get_user_history(user_id, limit=10) or []
+                    if inspect.isawaitable(memories):
+                        memories = await memories
+            
+            if not isinstance(memories, list):
+                memories = list(memories) if isinstance(memories, tuple) else []
+            long_term = self._modules.get("long_term_memory")
+            if long_term and hasattr(long_term, "search_facts"):
+                try:
+                    self.logger.debug(f"🧠 [BRAIN] Buscando fatos para '{text[:30]}'")
+                    facts = await long_term.search_facts(user_id, text, limit=5)
+                    if facts:
+                        for fact in facts:
+                            if not isinstance(fact, dict):
+                                continue
+                            memories.append({
+                                "role": "fact",
+                                "content": f"{fact['subject']} → {fact['relation']} → {fact['object']}",
+                                "timestamp": fact.get("timestamp"),
+                                "importance": fact.get("confidence", 0.7),
+                                "source": "long_term_memory"
+                            })
+                        self.logger.info(f"🧠 [BRAIN] {len(facts)} fatos permanentes recuperados para '{text[:30]}'")
+                    else:
+                        self.logger.warning(f"🧠 [BRAIN] Nenhum fato permanente encontrado para '{text[:30]}'")
+                except Exception as e:
+                    self.logger.error(f"🧠 [BRAIN] Erro ao buscar fatos: {e}")
+            self.logger.debug(f"🧠 [BRAIN] {len(memories)} memórias recuperadas")
+            return memories
+        except Exception as e:
+            self.logger.error(f"🧠 [BRAIN] Erro ao recuperar memórias: {e}")
+            return []
+    
+    async def _persist_turn(self, user_id: str, user_text: str, response: str) -> None:
+        memory_manager = self._modules.get("memory_manager")
+        if not memory_manager:
+            self.logger.warning("🧠 [BRAIN] MemoryManager ausente; turno não persistido")
+            return
+        try:
+            if hasattr(memory_manager, "_add_to_history"):
+                result = memory_manager._add_to_history(user_id, user_text, role="user")
+                if inspect.isawaitable(result):
+                    await result
+            if hasattr(memory_manager, "store_response"):
+                result = memory_manager.store_response(user_id, response)
+                if inspect.isawaitable(result):
+                    await result
+                self.logger.info("🧠 [BRAIN] Turno persistido via MemoryManager.store_response")
+        except Exception as e:
+            self.logger.error(f"🧠 [BRAIN] Erro ao persistir turno: {e}")
+    
+    async def _persist_facts(self, user_id: str, user_text: str, response: str) -> None:
+        long_term = self._modules.get("long_term_memory")
+        if not long_term:
+            self.logger.debug("🧠 [BRAIN] LongTermMemory ausente; fatos não persistidos")
+            return
+        try:
+            # Conservador: não gravar marcas incompletas ou relações familiares
+            # ambíguas. O formato exato de store_fact será confirmado no módulo.
+            match = re.search(
+                r"\b(?:meu carro (?:é|era)|eu tenho (?:um|uma))\s+"
+                r"(?P<carro>[\wÀ-ÿ][\wÀ-ÿ .-]{2,70}?)"
+                r"(?=[.!?]|$)", user_text, re.IGNORECASE,
+            )
+            if match and hasattr(long_term, "store_fact"):
+                obj = match.group("carro").strip()
+                if obj.casefold() not in {"carro", "novo", "velho"}:
+                    existing = await long_term.search_facts(user_id, obj, limit=5)
+                    if not existing:
+                        fact_id = await long_term.store_fact(
+                            user_id=user_id, subject="Usuário", relation="possui",
+                            obj=obj, confidence=0.85, source="conversa",
+                        )
+                        if fact_id != -1:
+                            self.logger.info("[BRAIN] Fato sobre posse salvo")
+        except Exception as e:
+            self.logger.error(f"🧠 [BRAIN] Erro ao salvar fatos: {e}")
+    
+    # ===== RESPOSTA LOCAL (SEM LLM) =====
+    
+    async def _generate_local_response(self, text: str, user_id: str, context: Dict) -> Optional[str]:
+        knowledge_manager = self._modules.get("knowledge_manager")
+        if knowledge_manager:
+            try:
+                if hasattr(knowledge_manager, "query"):
+                    result = knowledge_manager.query(text)
+                    if inspect.isawaitable(result):
+                        result = await result
+                    if (isinstance(result, dict) and isinstance(result.get("answer"), str)
+                            and isinstance(result.get("confidence"), (int, float))
+                            and 0.8 <= result["confidence"] <= 1.0):
+                        return result["answer"]
+            except Exception:
+                self.logger.exception("[BRAIN] Erro ao consultar conhecimento local")
+        reasoning_manager = self._modules.get("reasoning_manager")
+        if reasoning_manager:
+            try:
+                if hasattr(reasoning_manager, "reason"):
+                    result = reasoning_manager.reason(message=text, context=context)
+                    if inspect.isawaitable(result):
+                        result = await result
+                    if (isinstance(result, dict) and isinstance(result.get("answer"), str)
+                            and isinstance(result.get("confidence"), (int, float))
+                            and 0.8 <= result["confidence"] <= 1.0):
+                        return result["answer"]
+            except Exception:
+                self.logger.exception("[BRAIN] Erro no raciocínio local")
+        return None
+    
+    # ===== SAUDAÇÃO =====
+    
+    def _detect_explicit_greeting(self, text: str) -> bool:
+        """Verifica se a mensagem contém uma saudação explícita."""
+        greetings = [
+            r'\bolá\b', r'\boi\b', r'\be aí\b', r'\bfala\b', r'\bopa\b',
+            r'\bbom dia\b', r'\bboa tarde\b', r'\bboa noite\b',
+            r'\beai\b', r'\biae\b', r'\bsalve\b'
+        ]
+        pattern = '|'.join(greetings)
+        return bool(re.search(pattern, text, re.IGNORECASE))
+    
+    async def _should_greet(self, user_id: str, explicit_greeting: bool) -> bool:
+        """Decide se deve cumprimentar o usuário."""
+        # Se já cumprimentou na sessão, não repete (a menos que seja saudação explícita)
+        if self._greeting_done.get(user_id, False):
+            self.logger.debug(f"🧠 [BRAIN] Já cumprimentou {user_id} na sessão")
+            return False  # Não repete
+        
+        # Se é saudação explícita, sempre cumprimenta
+        if explicit_greeting:
+            self.logger.info(f"🧠 [BRAIN] Saudação explícita para {user_id}")
+            self._greeting_done[user_id] = True
+            return True
+        
+        # Verifica se é a primeira interação do dia
+        long_term = self._modules.get("long_term_memory")
+        if long_term:
+            try:
+                last_date_str = await long_term.get_last_greeting(user_id)
+                if last_date_str:
+                    last_date = datetime.fromisoformat(last_date_str).date()
+                    today = datetime.now().date()
+                    if last_date < today:
+                        self.logger.info(f"🧠 [BRAIN] Primeira interação do dia para {user_id}")
+                        self._greeting_done[user_id] = True
+                        return True
+                    else:
+                        self.logger.debug(f"🧠 [BRAIN] Já saudou hoje para {user_id}")
+                        # Mesmo que já tenha saudado hoje, se for primeira vez na sessão, pode saudar?
+                        # Vamos deixar como: se já saudou hoje e não é explícito, não repete.
+                        return False
+                else:
+                    # Nunca saudou antes
+                    self.logger.info(f"🧠 [BRAIN] Primeira saudação para {user_id}")
+                    self._greeting_done[user_id] = True
+                    return True
+            except Exception as e:
+                self.logger.error(f"🧠 [BRAIN] Erro ao verificar última saudação: {e}")
+                return False
+        return False
+    
+    # ===== PIPELINE PRINCIPAL =====
+    
+    async def _generate_response(self, text: str, user_id: str) -> str:
+        # 0. DECISÃO DE SAUDAÇÃO
+        explicit_greeting = self._detect_explicit_greeting(text)
+        should_greet = await self._should_greet(user_id, explicit_greeting)
+        
+        # Se decidiu saudar, atualiza a data no LongTermMemory (para persistência)
+        if should_greet:
+            long_term = self._modules.get("long_term_memory")
+            if long_term:
+                try:
+                    await long_term.update_last_greeting(user_id, datetime.now().isoformat())
+                except Exception:
+                    self.logger.exception("[BRAIN] Erro ao atualizar data da saudação")
+                self.logger.info(f"🧠 [BRAIN] Data da saudação atualizada para {user_id}")
+        
+        self.logger.info(f"🧠 [BRAIN] should_greet={should_greet}, explicit={explicit_greeting} para {user_id}")
+        
+        # 1. Context Engine
+        context_data = {}
+        context_engine = self.context_engine or self._modules.get("context_engine")
+        if context_engine:
+            try:
+                context_data = await context_engine.process(text, user_id)
+                if not isinstance(context_data, dict):
+                    context_data = {"message": text, "user_id": user_id}
+                self.logger.debug(f"🧠 [BRAIN] Context Engine processado")
+            except Exception as e:
+                self.logger.error(f"🧠 [BRAIN] Erro no Context Engine: {e}")
+                context_data = {"message": text, "user_id": user_id}
+        else:
+            context_data = {"message": text, "user_id": user_id}
+        
+        # Adiciona flags
+        context_data["should_greet"] = should_greet
+        context_data["explicit_greeting"] = explicit_greeting
+        
+        # 2. Memórias (incluindo fatos)
+        memories = await self._retrieve_memories(text, user_id, context_data)
+        context_data["memories"] = memories
+        
+        # 3. O portão de decisão será consultado após recuperar conhecimento.
+        # Sem resposta local verificável, o fluxo seguirá para o LLM.
+
+        # 5. Pipeline completo
+        context_manager = self._modules.get("context_manager")
+        memory_manager = self._modules.get("memory_manager")
+        knowledge_manager = self._modules.get("knowledge_manager")
+        planner_manager = self._modules.get("planner_manager")
+        reasoning_manager = self._modules.get("reasoning_manager")
+        emotion_engine = self._modules.get("emotion_engine")
+        prompt_builder = self._modules.get("prompt_builder")
+        llm = self._llm_manager
+        
+        try:
+            # ============================================================
+            # CONTEXTO
+            # ============================================================
+            if context_manager and hasattr(context_manager, "process"):
+                context_raw = await context_manager.process(text, user_id)
+                if not isinstance(context_raw, dict):
+                    self.logger.warning(f"⚠️ context_manager retornou {type(context_raw)}. Convertendo para dict.")
+                    if isinstance(context_raw, list):
+                        context_raw = {f"item_{i}": item for i, item in enumerate(context_raw)}
+                    else:
+                        context_raw = {"raw": context_raw, "message": text, "user_id": user_id}
+                context = context_raw
+                context.update(context_data)
+            else:
+                context = context_data
+            
+            # ============================================================
+            # 🔥 CORREÇÃO: GARANTIR QUE context['state']['resolved_references'] SEJA dict
+            # ============================================================
+            if isinstance(context, dict):
+                state = context.get("state", {})
+                if isinstance(state, dict):
+                    refs = state.get("resolved_references", {})
+                    if not isinstance(refs, dict):
+                        self.logger.warning(f"🧠 [BRAIN] 'resolved_references' é {type(refs)}. Convertendo para dict.")
+                        if isinstance(refs, list):
+                            try:
+                                refs = dict(refs)
+                            except:
+                                refs = {}
+                        else:
+                            refs = {}
+                        state["resolved_references"] = refs
+                        context["state"] = state
+            
+            # Preserva entidades no formato original (lista ou dict).
+            # O KnowledgeManager revisado aceita ambos os formatos.
+
+            # ============================================================
+            # MEMÓRIA
+            # ============================================================
+            if memory_manager and hasattr(memory_manager, "process"):
+                memory = await memory_manager.process(context)
+                if not isinstance(memory, dict):
+                    self.logger.warning(f"⚠️ memory_manager retornou {type(memory)}. Convertendo para dict.")
+                    memory = {"history": memory if isinstance(memory, list) else []}
+            else:
+                memory = {"history": []}
+            
+            # ============================================================
+            # CONHECIMENTO (COM VALIDAÇÃO E LOGS)
+            # ============================================================
+            if knowledge_manager and hasattr(knowledge_manager, "process"):
+                knowledge = await knowledge_manager.process(context, memory)
+                self.logger.debug(f"📊 [BRAIN] knowledge type: {type(knowledge)}")
+                if not isinstance(knowledge, dict):
+                    self.logger.warning(f"⚠️ knowledge_manager retornou {type(knowledge)}. Convertendo para dict.")
+                    if isinstance(knowledge, list):
+                        knowledge = {"facts": knowledge, "keywords": []}
+                    else:
+                        knowledge = {"facts": []}
+                else:
+                    self.logger.debug(f"📊 [BRAIN] knowledge keys: {list(knowledge.keys())}")
+            else:
+                knowledge = {"facts": []}
+            
+            # Resposta local: somente usa uma resposta explícita do módulo.
+            # Resultados de busca, isoladamente, não são uma resposta pronta.
+            local_response = await self._generate_local_response(text, user_id, context)
+            decision_gate = self.llm_decision_gate or self._modules.get("llm_decision_gate")
+            use_local = False
+            if isinstance(local_response, str) and local_response.strip():
+                if decision_gate:
+                    try:
+                        use_local = not await decision_gate.should_call_llm(
+                            context, {"response": local_response, "confidence": 0.8, "resolved": True}
+                        )
+                    except TypeError:
+                        # Compatibilidade com versões antigas do DecisionGate:
+                        # não libera resposta local sem validação explícita.
+                        self.logger.warning("[BRAIN] DecisionGate antigo; usando LLM")
+                    except Exception:
+                        self.logger.exception("[BRAIN] Falha ao validar resposta local")
+                else:
+                    self.logger.debug("[BRAIN] Sem DecisionGate; usando LLM")
+            if use_local:
+                self.logger.info("[BRAIN] Resposta local validada; sem chamada ao LLM")
+                return local_response.strip()
+
+            # ============================================================
+            # PLANEJAMENTO (COM VALIDAÇÃO)
+            # ============================================================
+            if planner_manager and hasattr(planner_manager, "process"):
+                plan = await planner_manager.process(context, memory, knowledge)
+                if not isinstance(plan, dict):
+                    self.logger.warning(f"⚠️ planner_manager retornou {type(plan)}. Convertendo para dict.")
+                    plan = {"plan": {"name": "conversation", "steps": ["responder"]}, "strategy": "default"}
+            else:
+                plan = {"plan": {"name": "conversation", "steps": ["responder"]}, "strategy": "default"}
+            
+            # ============================================================
+            # RACIOCÍNIO (COM VALIDAÇÃO)
+            # ============================================================
+            if reasoning_manager and hasattr(reasoning_manager, "process"):
+                reasoning = await reasoning_manager.process(context, memory, knowledge, plan)
+                if not isinstance(reasoning, dict):
+                    self.logger.warning(f"⚠️ reasoning_manager retornou {type(reasoning)}. Convertendo para dict.")
+                    reasoning = {"inferences": {}, "conclusions": [], "recommendations": []}
+            else:
+                reasoning = {"conclusions": []}
+            
+            # ============================================================
+            # EMOÇÃO (COM VALIDAÇÃO)
+            # ============================================================
+            if emotion_engine and hasattr(emotion_engine, "process"):
+                emotion = await emotion_engine.process(context, memory, knowledge, plan, reasoning)
+                if not isinstance(emotion, dict):
+                    self.logger.warning(f"⚠️ emotion_engine retornou {type(emotion)}. Convertendo para dict.")
+                    emotion = {"tone": "neutro"}
+            else:
+                emotion = {"tone": "neutro"}
+            
+            # ============================================================
+            # PROMPT
+            # ============================================================
+            if prompt_builder and hasattr(prompt_builder, "process"):
+                prompt_data = await prompt_builder.process(context, memory, knowledge, plan, reasoning, emotion)
+                prompt = prompt_data.get("prompt", text) if isinstance(prompt_data, dict) else text
+            else:
+                prompt = text
+            
+            # ============================================================
+            # LLM
+            # ============================================================
+            if llm:
+                import time
+                inicio_llm = time.perf_counter()
+                self.logger.info(f"[BRAIN] Iniciando LLM | Prompt: {len(prompt)} caracteres")
+                try:
+                    response = await llm.generate(prompt)
+                finally:
+                    tempo_llm = time.perf_counter() - inicio_llm
+                    self.logger.info(f"[BRAIN] Tempo LLM: {tempo_llm:.2f} segundos")
+                
+                # 🔥 ATUALIZA ESTADO DO CONTEXT ENGINE (SEGURAMENTE)
+                if context_engine and hasattr(context_engine, "state") and hasattr(context_engine.state, "update"):
+                    try:
+                        if isinstance(response, str):
+                            context_engine.state.update({"last_response": response})
+                    except Exception as e:
+                        self.logger.warning(f"🧠 [BRAIN] Erro ao atualizar estado do ContextEngine: {e}")
+                
+                return response
+            
+            return f"Recebi: '{text[:50]}...' (LLM não disponível)"
+            
+        except Exception as e:
+            self.logger.error(f"🧠 [BRAIN] Erro no pipeline: {e}")
+            import traceback
+            self.logger.error(f"🧠 [BRAIN] Traceback: {traceback.format_exc()}")
+            if self._llm_manager:
+                try:
+                    return await self._llm_manager.generate(text)
+                except Exception:
+                    self.logger.exception("[BRAIN] Fallback LLM falhou")
+                    return "Desculpe, tive um problema ao processar sua mensagem."
+            return f"Recebi sua mensagem: '{text}'"
+    
+    async def shutdown(self) -> None:
+        self.logger.info("🧠 [BRAIN] Desligando...")
+        self._running = False
+        if self._cognitive_task is not None:
+            self._cognitive_task.cancel()
+            try:
+                await self._cognitive_task
+            except asyncio.CancelledError:
+                pass
+            self._cognitive_task = None
+        for name, module in self._modules.items():
+            try:
+                if hasattr(module, "shutdown"):
+                    result = module.shutdown()
+                    if inspect.isawaitable(result):
+                        await result
+                    self.logger.info(f"✅ {name} desligado")
+            except Exception as e:
+                self.logger.error(f"❌ Erro ao desligar {name}: {e}")
+        self.logger.info("🧠 [BRAIN] Desligado")
+    
+    async def health_check(self) -> dict:
+        return {
+            "running": self._running,
+            "llm": self._llm_manager is not None,
+            "modules": list(self._modules.keys()),
+            "total_modules": len(self._modules),
+            "loops": self._loop_count,
+            "context_engine": self.context_engine is not None,
+            "decision_gate": self.llm_decision_gate is not None
+        }

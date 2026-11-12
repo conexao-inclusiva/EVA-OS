@@ -1,0 +1,10 @@
+git init
+git add .
+git commit -m "v0.0.1 - Fundação do EVA OS
+
+- Kernel: boot, config, eventos, scheduler, watchdog
+- Consciência: engine de decisão, roteador, contexto
+- Memória: working, episodic, family
+- Agentes: GeneralAgent (primeiro agente)
+- Barramento de eventos desacoplado
+- Arquitetura modular preparada para 50 anos"

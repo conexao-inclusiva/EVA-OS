@@ -1,0 +1,126 @@
+# -*- coding: utf-8 -*-
+"""Shared family graph for EVA-OS."""
+
+import sqlite3
+from contextlib import closing
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+class SharedFamily:
+    def __init__(self, path="data/databases/eva_family_relations.db"):
+        self.path = str(path)
+        if not Path(self.path).is_file():
+            raise FileNotFoundError(self.path)
+
+    def _connect(self):
+        db = sqlite3.connect(self.path, timeout=15)
+        db.row_factory = sqlite3.Row
+        db.execute("PRAGMA foreign_keys=ON")
+        return db
+
+    @staticmethod
+    def _now():
+        return datetime.now(timezone.utc).isoformat()
+
+    def add_person(self, person_id, display_name):
+        person_id = str(person_id).strip().casefold()
+        display_name = str(display_name).strip()
+
+        if not person_id or not display_name:
+            raise ValueError("Invalid person")
+
+        with closing(self._connect()) as db:
+            with db:
+                existing = db.execute(
+                    "SELECT display_name FROM family_people WHERE person_id=?",
+                    (person_id,)
+                ).fetchone()
+
+                if existing:
+                    return "already_known"
+
+                now = self._now()
+                db.execute(
+                    """INSERT INTO family_people
+                    (person_id, display_name, created_at, updated_at)
+                    VALUES (?, ?, ?, ?)""",
+                    (person_id, display_name, now, now)
+                )
+
+        return "saved"
+
+    def get_person(self, person_id):
+        with closing(self._connect()) as db:
+            row = db.execute(
+                "SELECT * FROM family_people WHERE person_id=?",
+                (str(person_id).strip().casefold(),)
+            ).fetchone()
+            return dict(row) if row else None
+
+    def add_relation(self, subject_id, relation, object_id,
+                     informed_by, confirmed=False):
+        subject_id = str(subject_id).strip().casefold()
+        object_id = str(object_id).strip().casefold()
+        relation = str(relation).strip().casefold()
+        informed_by = str(informed_by).strip().casefold()
+
+        if not all((subject_id, object_id, relation, informed_by)):
+            raise ValueError("Incomplete relation")
+        if subject_id == object_id:
+            raise ValueError("Self relation not allowed")
+
+        with closing(self._connect()) as db:
+            with db:
+                for person_id in (subject_id, object_id):
+                    exists = db.execute(
+                        "SELECT 1 FROM family_people WHERE person_id=?",
+                        (person_id,)
+                    ).fetchone()
+                    if not exists:
+                        raise ValueError("Unknown person: " + person_id)
+
+                existing = db.execute(
+                    """SELECT id FROM family_shared_relations
+                    WHERE subject_id=? AND relation=? AND object_id=?
+                    AND valid_to IS NULL""",
+                    (subject_id, relation, object_id)
+                ).fetchone()
+
+                if existing:
+                    return "already_known"
+
+                db.execute(
+                    """INSERT INTO family_shared_relations
+                    (subject_id, relation, object_id, informed_by,
+                     confirmed, valid_from, valid_to)
+                    VALUES (?, ?, ?, ?, ?, ?, NULL)""",
+                    (subject_id, relation, object_id, informed_by,
+                     int(bool(confirmed)), self._now())
+                )
+
+        return "saved"
+
+    def relations(self, subject_id, relation=None, confirmed_only=True):
+        sql = """
+            SELECT r.*, p.display_name AS object_name
+            FROM family_shared_relations r
+            JOIN family_people p ON p.person_id=r.object_id
+            WHERE r.subject_id=? AND r.valid_to IS NULL
+        """
+        params = [str(subject_id).strip().casefold()]
+
+        if relation is not None:
+            sql += " AND r.relation=?"
+            params.append(str(relation).strip().casefold())
+
+        if confirmed_only:
+            sql += " AND r.confirmed=1"
+
+        sql += " ORDER BY r.id"
+
+        with closing(self._connect()) as db:
+            return [
+                dict(row)
+                for row in db.execute(sql, params).fetchall()
+            ]

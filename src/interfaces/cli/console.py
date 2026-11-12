@@ -1,0 +1,242 @@
+"""Console interativo da EVA - Pipeline Cognitivo."""
+
+import asyncio
+import sys
+import cmd
+from datetime import datetime
+from typing import Optional
+
+from src.core.event_types import EventType
+from src.core.lifecycle_manager import LifecycleManager  # import necessário
+
+
+class EVAConsole(cmd.Cmd):
+    """Console interativo da EVA."""
+    
+    intro = """
+╔══════════════════════════════════════════════╗
+║         Console Interativo da EVA            ║
+╚══════════════════════════════════════════════╝
+    
+Digite 'help' para ver os comandos.
+Comandos administrativos: 'eva encerrar sistema', 'eva encerrar', 'eva desligar sistema'
+"""
+    prompt = "EVA> "
+    
+    def __init__(self, event_bus, logger, config, loop=None, 
+                 shutdown_event: Optional[asyncio.Event] = None,
+                 lifecycle_manager: Optional[LifecycleManager] = None,
+                 brain=None):
+        super().__init__()
+        self.event_bus = event_bus
+        self.logger = logger
+        self.config = config
+        self.loop = loop
+        self._running = True
+        self._waiting = False
+        self._shutdown_event = shutdown_event
+        self._lifecycle = lifecycle_manager
+        self._brain = brain
+        
+        if self.loop is None:
+            raise RuntimeError("EVAConsole requer o event loop principal do sistema")
+
+        # Conjunto de comandos administrativos que disparam shutdown
+        self._shutdown_commands = {
+            "eva encerrar sistema",
+            "eva encerrar",
+            "eva desligar sistema"
+        }
+
+        self.event_bus.subscribe(EventType.ASSISTANT_RESPONSE, self._on_response)
+        self.event_bus.subscribe(EventType.PROCESSING_START, self._on_processing_start)
+        self.event_bus.subscribe(EventType.PROCESSING_END, self._on_processing_end)
+        self.event_bus.subscribe(EventType.COGNITIVE_ERROR, self._on_error)
+        
+        self.logger.info("🧠 [CONSOLE] Listeners registrados")
+    
+    def _on_response(self, event) -> None:
+        data = event.data if getattr(event, "data", None) is not None else {}
+        text = data.get("text", "")
+        metadata = data.get("metadata", {})
+        
+        if text:
+            self._waiting = False
+            sys.stdout.write("\r\033[K")
+            print(f"\n🤖 EVA: {text}")
+            if metadata:
+                sys.stdout.write("\033[90m")
+                print(f"   [intenção: {metadata.get('intent', '?')} | tipo: {metadata.get('query_type', '?')}]")
+                sys.stdout.write("\033[0m")
+            sys.stdout.write(self.prompt)
+            sys.stdout.flush()
+    
+    def _on_processing_start(self, event) -> None:
+        self.logger.debug(f"🧠 [CONSOLE] Processando...")
+    
+    def _on_processing_end(self, event) -> None:
+        self.logger.debug(f"🧠 [CONSOLE] Processamento concluído")
+    
+    def _on_error(self, event) -> None:
+        data = event.data if getattr(event, "data", None) is not None else {}
+        error = data.get("error", "Erro desconhecido")
+        self._waiting = False
+        sys.stdout.write("\r\033[K")
+        print(f"\n❌ Erro: {error}")
+        sys.stdout.write(self.prompt)
+        sys.stdout.flush()
+    
+    def default(self, line: str) -> None:
+        """Processa a linha digitada."""
+        raw = line.strip()
+        if not raw:
+            return
+
+        # Normaliza para minúsculas para comparação exata
+        normalized = raw.lower().strip()
+
+        # Verifica se é um comando administrativo EXATO
+        if normalized in self._shutdown_commands:
+            # Executa shutdown e sai do console
+            self._do_shutdown()
+            return
+
+        # Se for um dos comandos antigos de saída, ignora (não faz nada) - ou trata como mensagem normal
+        if normalized in ["sair", "exit", "quit", "/shutdown"]:
+            # Trata como mensagem normal (não desliga)
+            # Podemos opcionalmente dar um feedback amigável
+            print("\n💬 Para encerrar a EVA, use 'eva encerrar sistema'.")
+            # Encaminha como mensagem normal
+            self._publish_as_message(raw)
+            return
+
+        # Qualquer outra coisa: publica como mensagem normal
+        self._publish_as_message(raw)
+
+    def _publish_as_message(self, text: str) -> None:
+        """Publica uma mensagem normal para o Brain (não administrativa)."""
+        self._waiting = True
+        sys.stdout.write("\r\033[K")
+        print(f"⏳ Processando...")
+        sys.stdout.write(self.prompt)
+        sys.stdout.flush()
+        
+        asyncio.run_coroutine_threadsafe(
+            self._publish_message(text),
+            self.loop
+        )
+
+    async def _publish_message(self, text: str) -> None:
+        self.logger.info(f"🧠 [CONSOLE] Publicando: '{text[:50]}'")
+        
+        await self.event_bus.publish_async(
+            EventType.USER_MESSAGE,
+            {
+                "text": text,
+                "source": "cli",
+                "session_id": "cli-main",
+                "user": "admin",
+                "timestamp": datetime.now().isoformat()
+            },
+            source="cli"
+        )
+        
+        timeout = 60
+        start = datetime.now()
+        while self._waiting and (datetime.now() - start).total_seconds() < timeout:
+            await asyncio.sleep(0.1)
+        
+        if self._waiting:
+            self._waiting = False
+            sys.stdout.write("\r\033[K")
+            print("\n⏰ Tempo esgotado!")
+            sys.stdout.write(self.prompt)
+            sys.stdout.flush()
+    
+    def _do_shutdown(self) -> None:
+        """Sinaliza encerramento do processo; o shutdown real ocorre em main.py."""
+        print("\n⚠️ Solicitação de encerramento da EVA recebida.")
+        print("🛑 Encerrando console e sinalizando o processo...")
+        self._running = False
+        self.logger.info("🧠 [CONSOLE] Shutdown solicitado (eva encerrar sistema)")
+
+        if not self._shutdown_event:
+            self.logger.error("🧠 [CONSOLE] shutdown_event ausente; o processo pode não encerrar")
+            print("❌ Evento de shutdown ausente.")
+            return
+
+        try:
+            if self.loop.is_running():
+                self.loop.call_soon_threadsafe(self._shutdown_event.set)
+            else:
+                self._shutdown_event.set()
+            self.logger.info("🧠 [CONSOLE] Evento de shutdown disparado")
+        except Exception as e:
+            self.logger.error(f"🧠 [CONSOLE] Erro ao sinalizar shutdown: {e}")
+            print(f"❌ Erro ao sinalizar shutdown: {e}")
+            return
+
+        print("✅ Sinal de encerramento enviado. Aguardando desligamento do sistema...")
+
+    def do_help(self, arg: str) -> None:
+        print("\nComandos:")
+        print("  help                     - Mostra esta ajuda")
+        print("  status                   - Exibe status do sistema")
+        print("  memory                   - Mostra histórico da conversa")
+        print("  eva encerrar sistema     - Desliga a EVA (shutdown)")
+        print("  eva encerrar             - Desliga a EVA")
+        print("  eva desligar sistema     - Desliga a EVA")
+        print("  (qualquer outro texto será enviado ao Brain como mensagem)\n")
+    
+    def do_status(self, arg: str) -> None:
+        print("\n✅ EVA OS rodando")
+        print("   Pipeline: Context → Memory → Knowledge → Planner → Consciousness → LLM\n")
+    
+    def do_memory(self, arg: str) -> None:
+        print("\n💾 Histórico da conversa:\n")
+        try:
+            brain = self._brain
+            history = getattr(brain, "_conversation_history", None) if brain else None
+            if history:
+                for msg in history[-10:]:
+                    role = "👤" if msg.get("role") == "user" else "🤖"
+                    print(f"  {role} {msg.get('content', '')[:100]}...")
+            else:
+                print("  (Nenhum histórico)")
+        except Exception as e:
+            self.logger.error(f"🧠 [CONSOLE] Erro ao exibir memória: {e}")
+            print(f"  (Não disponível: {e})")
+        print()
+    
+    def do_exit(self, arg: str) -> None:
+        """Comando 'exit' agora apenas informa o comando correto."""
+        print("\n💬 Para encerrar a EVA, use 'eva encerrar sistema'.")
+        # Não desliga
+        return
+
+    def do_EOF(self, arg: str) -> None:
+        """Ctrl+D também apenas informa."""
+        print()
+        self.do_exit(arg)
+    
+    # Sobrescrevemos cmdloop para terminar quando _running for False
+    def cmdloop(self, intro=None):
+        """Loop principal do console com verificação de _running."""
+        self.preloop()
+        if intro is not None:
+            self.intro = intro
+        if self.intro:
+            print(self.intro)
+        stop = None
+        while self._running:   # condição adicional
+            try:
+                line = input(self.prompt)
+            except EOFError:
+                line = 'EOF'
+            except KeyboardInterrupt:
+                print("\n^C")
+                continue
+            stop = self.onecmd(line)
+            if stop:
+                break
+        self.postloop()

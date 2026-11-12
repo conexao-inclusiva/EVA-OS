@@ -1,0 +1,142 @@
+"""Agente de Memória."""
+
+from typing import Dict, Any, Optional
+
+from src.agents.base_agent import BaseAgent
+from src.kernel.events import EventBus
+
+
+class MemoryAgent(BaseAgent):
+    """
+    Agente de Memória.
+    
+    Responsável por:
+    - Recuperar memórias
+    - Armazenar memórias
+    - Buscar memórias relevantes
+    - Consolidar memórias
+    """
+    
+    __plugin_name__ = "memory_agent"
+    __plugin_version__ = "1.0.0"
+    __plugin_description__ = "Agente especializado em memórias"
+    __plugin_author__ = "EVA OS Team"
+    __plugin_tags__ = ["agent", "memory", "storage"]
+    __plugin_capabilities__ = ["memory", "recall", "storage"]
+    __plugin_requires__ = ["event_bus", "logger", "config", "memory_manager"]
+    
+    def __init__(self, event_bus: EventBus, logger, config):
+        super().__init__(event_bus, logger, config, name="memory")
+        self.memory_manager = None
+    
+    async def initialize(self) -> None:
+        """Inicializa o agente."""
+        registry = getattr(self, "service_registry", None)
+        self.memory_manager = registry.get("memory_manager") if registry is not None else None
+        
+        await super().initialize()
+        self.logger.info("MemoryAgent: Pronto para gerenciar memórias")
+    
+    async def process(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Processa uma tarefa de memória.
+        """
+        if self.memory_manager is None:
+            registry = getattr(self, "service_registry", None)
+            if registry is not None:
+                self.memory_manager = registry.get("memory_manager")
+        task_type = task.get("type", "recall")
+        
+        if task_type == "recall":
+            return await self._handle_recall(task)
+        elif task_type == "store":
+            return await self._handle_store(task)
+        elif task_type == "search":
+            return await self._handle_search(task)
+        elif task_type == "consolidate":
+            return await self._handle_consolidate(task)
+        else:
+            return {"error": f"Tipo de tarefa desconhecido: {task_type}"}
+    
+    async def _handle_recall(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """Manipula recuperação de memória."""
+        memory_type = task.get("memory_type", "episodic")
+        memory_id = task.get("id")
+        
+        if not self.memory_manager:
+            return {"error": "Memory Manager não disponível"}
+        
+        # TODO: Implementar recuperação
+        return {
+            "type": "recall",
+            "memory_type": memory_type,
+            "found": False,
+            "message": "Recuperação de memória não implementada"
+        }
+    
+    async def _handle_store(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """Manipula armazenamento de memória."""
+        memory_type = task.get("memory_type", "working")
+        content = task.get("content")
+        metadata = task.get("metadata", {})
+        
+        if not self.memory_manager:
+            return {"error": "Memory Manager não disponível"}
+        
+        # TODO: Implementar armazenamento
+        return {
+            "type": "store",
+            "memory_type": memory_type,
+            "success": False,
+            "message": "Armazenamento de memória não implementado"
+        }
+    
+    async def _handle_search(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """Manipula busca de memórias."""
+        query = task.get("query", "")
+        limit = task.get("limit", 10)
+        
+        if not self.memory_manager:
+            return {"error": "Memory Manager não disponível"}
+        
+        results = await self.memory_manager.search_memories(query, limit)
+        
+        return {
+            "type": "search",
+            "query": query,
+            "results": results,
+            "count": len(results),
+            "timestamp": __import__('datetime').datetime.now().isoformat()
+        }
+    
+    async def _handle_consolidate(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """Manipula consolidação de memórias."""
+        if not self.memory_manager:
+            return {"error": "Memory Manager não disponível"}
+        
+        await self.memory_manager._on_consolidate(
+            __import__('src.kernel.events').Event(
+                type="memory.consolidate",
+                payload={},
+                source="memory_agent"
+            )
+        )
+        
+        return {
+            "type": "consolidate",
+            "success": True,
+            "message": "Consolidação iniciada",
+            "timestamp": __import__('datetime').datetime.now().isoformat()
+        }
+    async def start(self) -> None:
+        if self._running:
+            return
+        if not self._initialized:
+            raise RuntimeError("Agente nao inicializado")
+        await super().start()
+
+    async def shutdown(self) -> None:
+        await super().shutdown()
+
+    async def health_check(self) -> dict:
+        return await super().health_check()

@@ -1,0 +1,39 @@
+{
+  "facts": {
+    "brasilia": {
+      "capital": "Brasília",
+      "pais": "Brasil",
+      "inauguracao": 1960,
+      "populacao": "3.4 milhões",
+      "estado": "Distrito Federal",
+      "regiao": "Centro-Oeste"
+    },
+    "brasil": {
+      "capital": "Brasília",
+      "idioma": "Português",
+      "moeda": "Real (BRL)",
+      "populacao": "203 milhões",
+      "area": "8.5 milhões km²"
+    },
+    "python": {
+      "criador": "Guido van Rossum",
+      "ano": 1991,
+      "tipo": "Linguagem de programação",
+      "paradigma": "Multi-paradigma",
+      "site": "python.org"
+    },
+    "eva": {
+      "nome": "EVA OS",
+      "significado": "Evolutionary Virtual Assistant",
+      "versao": "1.0.0",
+      "criador": "Alberto Fernandes"
+    }
+  },
+  "concepts": {
+    "capital": "Cidade onde está localizada a sede do governo de um país ou estado.",
+    "populacao": "Número total de habitantes de uma determinada região.",
+    "linguagem_programacao": "Conjunto de regras e sintaxe para escrever programas de computador.",
+    "ia": "Inteligência Artificial - área da computação que cria sistemas capazes de aprender e raciocinar."
+  },
+  "categories": {}
+}

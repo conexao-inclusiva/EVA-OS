@@ -1,0 +1,332 @@
+# -*- coding: utf-8 -*-
+
+"""
+Construtor de Prompts - FASE 7 com Estrutura Avançada e Estilo Natural.
+"""
+
+from typing import Dict, Any
+from datetime import datetime
+from src.core.event_types import EventType
+from src.kernel.events import EventBus
+
+from src.kernel.policy_engine import get_policy_engine
+
+
+class PromptBuilder:
+    """
+    Construtor de Prompts - FASE 7.
+    
+    Responsabilidades:
+    - Construir prompt estruturado para LLM
+    - Incorporar contexto, memória, conhecimento
+    - Adaptar tom e estilo
+    - Incluir sistema de confiança
+    """
+    
+    def __init__(self, event_bus: EventBus, logger, config):
+        self.event_bus = event_bus
+        self.logger = logger
+        self.config = config
+        self._running = False
+    
+    async def initialize(self) -> None:
+        self.logger.info("📝 [PromptBuilder] Inicializando...")
+        self._running = True
+        self.logger.info("📝 [PromptBuilder] Inicializado")
+    
+    async def process(self, context: Dict, memory: Dict, knowledge: Dict, plan: Dict, reasoning: Dict, emotion: Dict) -> Dict[str, Any]:
+        """Constrói prompt para o LLM."""
+        self.logger.info("📝 [PromptBuilder] Processando...")
+        
+        prompt = self._build_prompt(context, memory, knowledge, plan, reasoning, emotion)
+        
+        prompt_data = {
+            "prompt": prompt,
+            "length": len(prompt),
+            "components": {
+                "context": bool(context),
+                "memory": bool((memory or {}).get("history")),
+                "knowledge": bool((knowledge or {}).get("facts") or (knowledge or {}).get("concepts") or (knowledge or {}).get("entity_knowledge")),
+                "plan": bool(plan),
+                "reasoning": bool(reasoning),
+                "emotion": bool(emotion)
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        self.logger.info(f"📝 [PromptBuilder] Prompt construído ({len(prompt)} caracteres)")
+        
+        await self.event_bus.publish_async(
+            EventType.PROMPT_READY,
+            prompt_data,
+            source="prompt_builder"
+        )
+        
+        return prompt_data
+    
+    def _build_prompt(self, context: Dict, memory: Dict, knowledge: Dict, 
+                     plan: Dict, reasoning: Dict, emotion: Dict) -> str:
+        """Constrói o prompt completo e estruturado com estilo natural."""
+        
+        context = context if isinstance(context, dict) else {}
+        memory = memory if isinstance(memory, dict) else {}
+        knowledge = knowledge if isinstance(knowledge, dict) else {}
+        plan = plan if isinstance(plan, dict) else {}
+        reasoning = reasoning if isinstance(reasoning, dict) else {}
+        emotion = emotion if isinstance(emotion, dict) else {}
+        parts = []
+        
+        # =========================================================
+        # 1. IDENTIDADE IMUTÁVEL (O CORAÇÃO DA EVA)
+        # =========================================================
+        policy = get_policy_engine()
+        parts.append(policy.get_identity_context())
+        
+        # =========================================================
+        # 2. INSTRUÇÃO ANTI-ALUCINAÇÃO
+        # =========================================================
+        anti_hallucination = """
+[REGRAS OBRIGATÓRIAS SOBRE PESSOAS E FATOS]
+
+1. NUNCA invente informações sobre qualquer pessoa.
+2. Só mencione alguém pelo nome se você tiver um FATO REGISTRADO.
+3. Se a pergunta exigir um fato pessoal não registrado, diga: "Não tenho essa informação."
+4. NUNCA diga que alguém está falando de você ou fazendo planos sem um fato.
+5. Para fatos pessoais, use apenas registros fornecidos. Para explicações gerais e tarefas criativas, responda normalmente sem inventar dados pessoais.
+"""
+        
+        # =========================================================
+        # 3. TONALIDADE E ESTILO
+        # =========================================================
+        user_sentiment = emotion.get("user_sentiment", 0.0)
+        eva_mood = emotion.get("eva_mood", "neutro")
+        tone_info = emotion.get("tone", {})
+        detected_tone = emotion.get("detected_tone", {})
+        
+        should_greet = context.get("should_greet", False)
+        
+        if should_greet:
+            hour = datetime.now().hour
+            if 6 <= hour < 12:
+                greeting = "Bom dia!"
+            elif 12 <= hour < 18:
+                greeting = "Boa tarde!"
+            elif 18 <= hour < 24:
+                greeting = "Boa noite!"
+            else:
+                greeting = "Olá!"
+            greeting_instruction = f"Comece com '{greeting}' (apenas esta vez)."
+        else:
+            greeting_instruction = "NÃO use saudações. Comece direto com o conteúdo."
+        
+        tone_instructions = self._build_tone_instructions(tone_info, detected_tone, eva_mood, user_sentiment)
+        
+        parts.append(f"""
+[INSTRUÇÕES DE ESTILO E TOM]
+
+▶ **Como falar:**
+- Seja natural, direta e objetiva. Não enrole.
+- Use linguagem coloquial.
+- {greeting_instruction}
+- NUNCA repita o nome do usuário desnecessariamente.
+- Faça no máximo uma pergunta por resposta.
+
+▶ **Tom adaptado à conversa:**
+{tone_instructions}
+""")
+        
+        parts.append(anti_hallucination)
+        
+        # =========================================================
+        # 4. GRAFO DE RELACIONAMENTOS FAMILIARES
+        # =========================================================
+        memories = context.get("memories", []) if isinstance(context, dict) else []
+        relationship_facts = []
+        
+        family_relations = [
+            "pai", "mãe", "filho", "filha", "esposa", "marido", 
+            "irmão", "irmã", "avô", "avó", "neto", "neta", 
+            "tio", "tia", "primo", "prima", "sogro", "sogra", 
+            "cunhado", "cunhada", "padrasto", "madrasta", "enteado"
+        ]
+        
+        for mem in memories if isinstance(memories, list) else []:
+            if isinstance(mem, dict) and mem.get("role") == "fact":
+                content = str(mem.get("content", ""))
+                if any(rel in content.lower() for rel in family_relations):
+                    relationship_facts.append(content)
+        
+        if relationship_facts:
+            parts.append("\n[GRAFO DE RELACIONAMENTOS FAMILIARES]")
+            for fact in relationship_facts:
+                parts.append(f"🔹 {fact}")
+        else:
+            parts.append("\n[GRAFO DE RELACIONAMENTOS FAMILIARES]\nNenhuma relação familiar registrada.")
+        
+        # =========================================================
+        # 5. CONTEXTO ESTRUTURADO
+        # =========================================================
+        state = context.get("state", {}) if isinstance(context, dict) else {}
+        if not isinstance(state, dict):
+            state = {}
+        
+        entities = state.get("active_entities") or context.get("entities") or []
+        if isinstance(entities, dict):
+            entities = [{"name": str(v), "type": str(k)} for k, v in entities.items()]
+        if not isinstance(entities, list):
+            entities = []
+        topics = state.get("recent_topics", [])
+        if not isinstance(topics, list):
+            topics = []
+        current_topic = state.get("current_topic")
+        
+        if current_topic:
+            parts.append(f"\n[TÓPICO ATUAL]\n{current_topic}")
+        if topics:
+            parts.append(f"\n[TÓPICOS RECENTES]\n{', '.join(topics[:3])}")
+        if entities:
+            parts.append("\n[ENTIDADES ATIVAS]")
+            for entity in entities[:5]:
+                if isinstance(entity, dict):
+                    parts.append(f"- {entity.get('name', entity.get('value', 'desconhecida'))} ({entity.get('type', 'unknown')})")
+                elif isinstance(entity, str):
+                    parts.append(f"- {entity}")
+        
+        # =========================================================
+        # 6. MEMÓRIA RELEVANTE
+        # =========================================================
+        memories = context.get("memories", []) if isinstance(context, dict) else []
+        if isinstance(memories, list) and memories:
+            parts.append("\n[MEMÓRIAS RELEVANTES]")
+            for mem in memories[:5]:
+                if not isinstance(mem, dict):
+                    continue
+                role = mem.get("role", "fact")
+                content = str(mem.get("content", ""))
+                if role == "fact":
+                    parts.append(f"🔹 FATO: {content}")
+                else:
+                    parts.append(f"- {content[:100]}...")
+        
+        # Conhecimento recuperado pelo KnowledgeManager: antes era ignorado.
+        knowledge_lines = []
+        for fact in knowledge.get("facts", []) if isinstance(knowledge.get("facts", []), list) else []:
+            if isinstance(fact, dict):
+                knowledge_lines.append(f"- Fato {fact.get('key', '')}: {fact.get('data', {})}")
+        for concept in knowledge.get("concepts", []) if isinstance(knowledge.get("concepts", []), list) else []:
+            if isinstance(concept, dict):
+                knowledge_lines.append(f"- Conceito {concept.get('key', '')}: {concept.get('definition', '')}")
+        for entity in knowledge.get("entity_knowledge", []) if isinstance(knowledge.get("entity_knowledge", []), list) else []:
+            if isinstance(entity, dict):
+                knowledge_lines.append(f"- Entidade {entity.get('entity_value', '')}: {entity.get('data', {})}")
+        if knowledge_lines:
+            parts.append("\n[CONHECIMENTO RECUPERADO]\n" + "\n".join(knowledge_lines[:10]))
+
+        # Planejamento e raciocínio são contexto de apoio, não instruções prioritárias.
+        if plan:
+            parts.append(f"\n[PLANO ATUAL]\n{plan}")
+        if reasoning:
+            parts.append(f"\n[ANÁLISE DISPONÍVEL]\n{reasoning}")
+
+        # =========================================================
+        # 7. HISTÓRICO DA CONVERSA
+        # =========================================================
+        history = memory.get("history", []) if isinstance(memory, dict) else []
+        if isinstance(history, list) and history:
+            parts.append("\n[CONVERSA RECENTE]")
+            for msg in history[-5:]:
+                if not isinstance(msg, dict):
+                    continue
+                role = "Usuário" if msg.get("role") == "user" else "EVA"
+                content = str(msg.get("content", ""))
+                parts.append(f"{role}: {content}")
+            parts.append("")
+        
+        # =========================================================
+        # 8. MENSAGEM ATUAL
+        # =========================================================
+        user_id = context.get("user_id", "Alberto") if isinstance(context, dict) else "Alberto"
+        message = context.get("message", "") if isinstance(context, dict) else ""
+        
+        parts.append(f"""
+[MENSAGEM ATUAL]
+{user_id}: {message}
+""")
+        
+        # =========================================================
+        # 9. OBJETIVO
+        # =========================================================
+        goal = state.get("active_goal")
+        if goal:
+            parts.append(f"\n[OBJETIVO ATUAL]\n{goal}")
+        
+        # =========================================================
+        # 10. RESPOSTA (CORRIGIDA - DIRETA E OBJETIVA)
+        # =========================================================
+        parts.append("""
+[RESPOSTA]
+Agora responda como EVA, de forma DIRETA e OBJETIVA.
+
+REGRAS OBRIGATÓRIAS:
+1. Dê APENAS a resposta final, sem explicar seu raciocínio.
+2. Não diga "então", "vamos encadear", "baseando-me em", etc.
+3. Se for uma pergunta factual (ex: "quem é o avô?"), responda apenas com o nome ou fato.
+4. Se faltar um fato pessoal necessário, diga: "Não tenho essa informação."
+5. Seja natural, mas concisa. Nada de enrolação.
+""")
+        
+        return "\n".join(parts)
+    
+    def _build_tone_instructions(self, tone_info: Dict, detected_tone: Dict, eva_mood: str, user_sentiment: float) -> str:
+        """Constrói instruções de tom baseadas nas emoções detectadas."""
+        tone_info = tone_info if isinstance(tone_info, dict) else {}
+        detected_tone = detected_tone if isinstance(detected_tone, dict) else {}
+        user_sentiment = user_sentiment if isinstance(user_sentiment, (int, float)) else 0.0
+        instructions = []
+        
+        mood_tone = {
+            "feliz": "Transmita energia positiva.",
+            "triste": "Seja gentil e empático.",
+            "curioso": "Faça perguntas reflexivas.",
+            "cansado": "Mantenha um tom sereno.",
+            "animado": "Mostre entusiasmo.",
+            "reflexivo": "Pense profundamente antes de responder.",
+            "neutro": "Mantenha um tom natural e equilibrado."
+        }
+        instructions.append(mood_tone.get(eva_mood, mood_tone["neutro"]))
+        
+        if user_sentiment > 0.5:
+            instructions.append("Reflita a animação do usuário.")
+        elif user_sentiment < -0.5:
+            instructions.append("Seja paciente e acolhedor.")
+        
+        style = detected_tone.get("style", "casual")
+        intimacy = detected_tone.get("intimacy", "medium")
+        energy = detected_tone.get("energy", "neutral")
+        
+        if style == "playful":
+            instructions.append("Responda com tom leve e descontraído.")
+        elif style == "serious":
+            instructions.append("Seja direto e objetivo.")
+        elif style == "enthusiastic":
+            instructions.append("Mostre empolgação.")
+        
+        if intimacy == "high":
+            instructions.append("Use informalidade e afeto.")
+        elif intimacy == "low":
+            instructions.append("Mantenha respeito e profissionalismo.")
+        
+        if energy == "high":
+            instructions.append("Responda com energia.")
+        elif energy == "low":
+            instructions.append("Responda com calma.")
+        
+        return "\n".join(instructions)
+    
+    async def shutdown(self) -> None:
+        self.logger.info("📝 [PromptBuilder] Desligando...")
+        self._running = False
+        self.logger.info("📝 [PromptBuilder] Desligado")
+    
+    async def health_check(self) -> dict:
+        return {"status": "running" if self._running else "stopped"}

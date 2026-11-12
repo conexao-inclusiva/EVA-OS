@@ -1,0 +1,79 @@
+[
+  {
+    "id": "alberto",
+    "name": "Alberto",
+    "nicknames": [],
+    "voice_id": null,
+    "preferences": {
+      "theme": "dark",
+      "language": "pt-BR",
+      "notifications": true
+    },
+    "mode": "normal",
+    "language": "pt-BR",
+    "created_at": "2026-07-17T13:02:29.170206",
+    "last_interaction": "2026-07-17T13:02:29.170206",
+    "interaction_count": 0,
+    "context": [],
+    "greeted": true
+  },
+  {
+    "id": "juliana",
+    "name": "Juliana",
+    "nicknames": [],
+    "voice_id": null,
+    "preferences": {
+      "theme": "dark",
+      "language": "pt-BR",
+      "notifications": true
+    },
+    "mode": "normal",
+    "language": "pt-BR",
+    "created_at": "2026-07-17T13:02:29.170206",
+    "last_interaction": "2026-07-17T13:02:29.170206",
+    "interaction_count": 0,
+    "context": [],
+    "greeted": false
+  },
+  {
+    "id": "nicolas",
+    "name": "Nicolas",
+    "nicknames": [],
+    "voice_id": null,
+    "preferences": {
+      "theme": "light",
+      "language": "pt-BR",
+      "notifications": false,
+      "simple_responses": true
+    },
+    "mode": "nicolas",
+    "language": "pt-BR",
+    "created_at": "2026-07-17T13:02:29.170206",
+    "last_interaction": "2026-07-17T13:02:29.170206",
+    "interaction_count": 0,
+    "context": [],
+    "greeted": false
+  },
+  {
+    "id": "liris",
+    "name": "Liris",
+    "nicknames": [
+      "liris",
+      "lili",
+      "lir"
+    ],
+    "voice_id": null,
+    "preferences": {
+      "theme": "dark",
+      "language": "pt-BR",
+      "notifications": true
+    },
+    "mode": "normal",
+    "language": "pt-BR",
+    "created_at": "2026-07-17T13:21:46.640653",
+    "last_interaction": "2026-07-17T13:21:46.640653",
+    "interaction_count": 0,
+    "context": [],
+    "greeted": false
+  }
+]

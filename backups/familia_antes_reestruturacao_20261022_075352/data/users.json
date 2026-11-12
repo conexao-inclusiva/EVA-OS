@@ -1,0 +1,24 @@
+{
+  "juliana": {
+    "name": "Usuário",
+    "preferred_name": null,
+    "preferred_tone": "neutro",
+    "preferred_response_length": "medio",
+    "preferences": {},
+    "first_seen": "2026-10-22T07:09:55.842872",
+    "last_seen": "2026-10-22T07:17:20.282652",
+    "interaction_count": 5,
+    "facts": []
+  },
+  "alberto": {
+    "name": "Usuário",
+    "preferred_name": null,
+    "preferred_tone": "neutro",
+    "preferred_response_length": "medio",
+    "preferences": {},
+    "first_seen": "2026-10-22T07:11:48.914394",
+    "last_seen": "2026-10-22T07:17:53.306753",
+    "interaction_count": 5,
+    "facts": []
+  }
+}

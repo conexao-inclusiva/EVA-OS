@@ -1,0 +1,193 @@
+"""Gerenciador de Memória - FASE 2 do pipeline cognitivo da EVA."""
+
+import asyncio
+import json
+import os
+import re
+import tempfile
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List
+
+from src.core.event_types import EventType
+from src.kernel.events import EventBus
+
+
+class MemoryManager:
+    """Mantém histórico e preferências por usuário, com persistência em JSON."""
+
+    def __init__(self, event_bus: EventBus, logger, config):
+        self.event_bus = event_bus
+        self.logger = logger
+        self.config = config
+        self._running = False
+        self._conversations: Dict[str, List[Dict[str, Any]]] = {}
+        self._preferences: Dict[str, Dict[str, Any]] = {}
+        self._memory_limit = 100
+        self._save_lock = asyncio.Lock()
+
+        # Compatível tanto com KernelConfig.get('paths.data') quanto com
+        # configurações fornecidas como dicionário aninhado.
+        data_dir = None
+        if hasattr(config, "get"):
+            try:
+                data_dir = config.get("paths.data", None)
+            except (TypeError, AttributeError):
+                pass
+            if isinstance(config, dict):
+                data_dir = config.get("paths", {}).get("data", data_dir) if isinstance(config.get("paths"), dict) else data_dir
+        data_dir = data_dir if isinstance(data_dir, (str, os.PathLike)) and data_dir else "./data"
+        data_path = Path(data_dir)
+        self._memory_path = data_path / "memory" / "conversations.json"
+        self._preferences_path = data_path / "memory" / "preferences.json"
+        self.logger.info("🧠 [MemoryManager] Inicializado")
+
+    async def initialize(self) -> None:
+        self.logger.info("🧠 [MemoryManager] Inicializando...")
+        await self._load_memories()
+        self._running = True
+        self.logger.info("🧠 [MemoryManager] Inicializado")
+
+    async def process(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Recupera histórico, preferências e mensagens relevantes.
+
+        O registro da mensagem é responsabilidade de _persist_turn() no Brain,
+        para evitar que a mesma entrada seja gravada duas vezes.
+        """
+        if not isinstance(context, dict):
+            context = {}
+        user_id = str(context.get("user_id") or context.get("user") or "unknown")
+        message = str(context.get("message") or "")
+        history = self._get_user_history(user_id, limit=10)
+        preferences = self._get_user_preferences(user_id)
+        relevant = self._search_relevant_memories(user_id, message)
+        memory_data = {
+            "user_id": user_id,
+            "history": history,
+            "preferences": preferences,
+            "relevant_memories": relevant,
+            "history_count": len(history),
+            "timestamp": datetime.now().isoformat(),
+        }
+        self.logger.info(f"🧠 [MemoryManager] {len(history)} históricos, {len(relevant)} relevantes")
+        try:
+            await self.event_bus.publish_async(
+                EventType.MEMORY_RETRIEVED,
+                {"context": context, "memory": memory_data, "timestamp": datetime.now().isoformat()},
+                source="memory_manager",
+            )
+        except Exception as exc:
+            self.logger.warning(f"🧠 [MemoryManager] Falha ao publicar MEMORY_RETRIEVED: {exc}")
+        return memory_data
+
+    def _get_user_history(self, user_id: str, limit: int = 10) -> List[Dict]:
+        history = self._conversations.get(str(user_id), [])
+        if limit <= 0:
+            return []
+        return [dict(entry) for entry in history[-limit:]]
+
+    def _get_user_preferences(self, user_id: str) -> Dict[str, Any]:
+        return dict(self._preferences.get(str(user_id), {}))
+
+    def _search_relevant_memories(self, user_id: str, message: str) -> List[Dict]:
+        history = self._conversations.get(str(user_id), [])
+        if not history or not isinstance(message, str):
+            return []
+        keywords = {word.casefold() for word in re.findall(r"\w+", message, re.UNICODE) if len(word) > 3}
+        if not keywords:
+            return []
+        scored = []
+        for index, entry in enumerate(history):
+            content = str(entry.get("content", ""))
+            words = set(re.findall(r"\w+", content.casefold(), re.UNICODE))
+            score = len(keywords & words)
+            if score:
+                scored.append((score, index, entry))
+        scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        return [dict(item[2]) for item in scored[:5]]
+
+    def _add_to_history(self, user_id: str, message: str, role: str = "user") -> None:
+        user_id = str(user_id)
+        message = str(message)
+        if not message.strip():
+            return
+        history = self._conversations.setdefault(user_id, [])
+        # Evita repetição consecutiva da mesma entrada, inclusive em integrações
+        # que chamam _add_to_history e process() no mesmo turno.
+        if history and history[-1].get("role") == role and history[-1].get("content") == message:
+            return
+        history.append({"role": role, "content": message, "timestamp": datetime.now().isoformat()})
+        if len(history) > self._memory_limit:
+            del history[:-self._memory_limit]
+
+    async def store_response(self, user_id: str, response: str) -> None:
+        self._add_to_history(user_id, response, role="assistant")
+        await self._save_memories()
+
+    @staticmethod
+    def _validate_conversations(data: Any) -> Dict[str, List[Dict[str, Any]]]:
+        if not isinstance(data, dict):
+            raise ValueError("conversations.json deve conter um objeto JSON")
+        validated = {}
+        for user_id, entries in data.items():
+            if not isinstance(entries, list):
+                continue
+            valid_entries = [entry for entry in entries if isinstance(entry, dict) and isinstance(entry.get("content"), str)]
+            validated[str(user_id)] = valid_entries[-100:]
+        return validated
+
+    async def _load_memories(self) -> None:
+        if self._memory_path.exists():
+            try:
+                with self._memory_path.open("r", encoding="utf-8") as file:
+                    loaded = json.load(file)
+                self._conversations = self._validate_conversations(loaded)
+                self.logger.info(f"🧠 [MemoryManager] Carregadas {len(self._conversations)} conversas")
+            except (OSError, ValueError, TypeError) as exc:
+                self.logger.error(f"🧠 [MemoryManager] Falha ao carregar conversas; arquivo preservado: {exc}")
+        if self._preferences_path.exists():
+            try:
+                with self._preferences_path.open("r", encoding="utf-8") as file:
+                    loaded = json.load(file)
+                if not isinstance(loaded, dict):
+                    raise ValueError("preferences.json deve conter um objeto JSON")
+                self._preferences = {str(k): v for k, v in loaded.items() if isinstance(v, dict)}
+            except (OSError, ValueError, TypeError) as exc:
+                self.logger.error(f"🧠 [MemoryManager] Falha ao carregar preferências; arquivo preservado: {exc}")
+
+    @staticmethod
+    def _write_json_atomic(path: Path, data: Any) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                             prefix=f".{path.name}.", suffix=".tmp", delete=False) as file:
+                temporary = Path(file.name)
+                json.dump(data, file, ensure_ascii=False, indent=2)
+                file.flush()
+                os.fsync(file.fileno())
+            os.replace(temporary, path)
+        finally:
+            if temporary is not None and temporary.exists():
+                temporary.unlink()
+
+    async def _save_memories(self) -> None:
+        async with self._save_lock:
+            try:
+                self._write_json_atomic(self._memory_path, self._conversations)
+                self._write_json_atomic(self._preferences_path, self._preferences)
+            except (OSError, TypeError, ValueError) as exc:
+                self.logger.error(f"🧠 [MemoryManager] Erro ao salvar memórias: {exc}")
+
+    async def shutdown(self) -> None:
+        self.logger.info("🧠 [MemoryManager] Desligando...")
+        await self._save_memories()
+        self._running = False
+        self.logger.info("🧠 [MemoryManager] Desligado")
+
+    async def health_check(self) -> dict:
+        return {
+            "status": "running" if self._running else "stopped",
+            "conversations": len(self._conversations),
+            "total_messages": sum(len(history) for history in self._conversations.values()),
+        }

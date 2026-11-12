@@ -1,0 +1,14 @@
+{
+  "candidate_sha256": "06f2e902cc611b240e296536a00fe48a7f038c5c5a1028287f737fdb042c4741",
+  "function": "detect_learning_gaps",
+  "host_execution_allowed": false,
+  "human_approval_required": true,
+  "index_sha256": "22778772538f03f72b0eeaeafae7e3cc856fdc1ad1b79d8c87f945d7c00356aa",
+  "lab": "C:\\Users\\Alberto_Fernandes\\Desktop\\EVA-OS-LAB-AUTOAPRENDIZAGEM",
+  "mission_id": "6e7ad60703972c4f462b0e4e9ae3c0df",
+  "production_registration_allowed": false,
+  "report_sha256": "3d6cb9dd3188e5bb2cd496b3dbc55157627fb6f529b133c66922944ad7abfd7e",
+  "sandbox_status": "APPROVED_IN_SANDBOX",
+  "schema": 1,
+  "tests_expected": 24
+}

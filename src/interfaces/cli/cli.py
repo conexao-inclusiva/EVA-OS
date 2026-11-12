@@ -1,0 +1,90 @@
+"""Interface CLI da EVA."""
+
+import asyncio
+import sys
+import threading
+from typing import Dict, Any, Optional
+
+from src.interfaces.cli.console import EVAConsole
+
+
+class CLI:
+    """Interface de linha de comando da EVA."""
+    
+    __plugin_name__ = "cli"
+    __plugin_version__ = "1.0.0"
+    __plugin_description__ = "Interface de linha de comando"
+    __plugin_author__ = "EVA OS Team"
+    __plugin_tags__ = ["interface", "cli"]
+    __plugin_capabilities__ = ["cli"]
+    __plugin_requires__ = ["event_bus", "logger", "config"]
+    
+    def __init__(self, event_bus, logger, config):
+        self.event_bus = event_bus
+        self.logger = logger
+        self.config = config
+        
+        self.console = None
+        self._running = False
+        self._loop = None
+    
+    async def initialize(self) -> None:
+        """Inicializa a CLI."""
+        self.logger.info("🧠 [CLI] initialize INICIANDO")
+        self._running = True
+        self.logger.info("🧠 [CLI] initialize FINALIZADO")
+    
+    async def start(self) -> None:
+        """Inicia a CLI."""
+        # EVA_CLI_SINGLE_CONSOLE_GUARD_V2: protege inicializacao repetida por EventBus.
+        if getattr(self, "_eva_cli_start_once", False):
+            self.logger.warning("[CLI] start duplicado na mesma instancia; ignorando")
+            return
+        if getattr(self.event_bus, "_eva_cli_console_owner", None) is not None:
+            self.logger.warning("[CLI] outro console ja foi iniciado neste EventBus; ignorando")
+            return
+        self._eva_cli_start_once = True
+        self.event_bus._eva_cli_console_owner = self
+        self.logger.info("🧠 [CLI] start INICIANDO")
+        
+        self._loop = asyncio.get_event_loop()
+        self.logger.info(f"🧠 [CLI] Loop: {self._loop}")
+        
+        def run_console():
+            self.logger.info("🧠 [CLI] run_console INICIADO")
+            try:
+                # CONSOLE SEM BRAIN - 100% VIA EVENTBUS
+                self.console = EVAConsole(
+                    self.event_bus, 
+                    self.logger, 
+                    self.config, 
+                    self._loop
+                )
+                self.logger.info("🧠 [CLI] Console criado (sem Brain, via EventBus)")
+                self.console.cmdloop()
+                self.logger.info("🧠 [CLI] cmdloop finalizado")
+            except Exception as e:
+                self.logger.error(f"🧠 [CLI] Erro no console: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        thread = threading.Thread(target=run_console, daemon=True)
+        thread.start()
+        self.logger.info("🧠 [CLI] Thread iniciada")
+        
+        self.logger.info("🧠 [CLI] start FINALIZADO")
+    
+    async def shutdown(self) -> None:
+        """Desliga a CLI."""
+        self.logger.info("🧠 [CLI] shutdown")
+        self._running = False
+        if self.console:
+            self.console._running = False
+        self.logger.info("🧠 [CLI] shutdown concluído")
+    
+    async def health_check(self) -> dict:
+        """Health check da CLI."""
+        return {
+            "status": "running" if self._running else "stopped",
+            "console_running": self.console is not None
+        }
