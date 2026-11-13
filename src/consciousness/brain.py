@@ -180,6 +180,15 @@ class Brain:
         ]
         
         for name, module_path, class_name in modules_to_load:
+            if name == "llm_manager":
+                existing_llm = self._llm_manager
+                if existing_llm is None and self.service_registry is not None:
+                    existing_llm = self.service_registry.get("llm_manager")
+                if existing_llm is not None:
+                    self._llm_manager = existing_llm
+                    self._modules[name] = existing_llm
+                    self.logger.info("?? Reutilizando LLMManager j? inicializado")
+                    continue
             try:
                 module = importlib.import_module(module_path)
                 class_obj = getattr(module, class_name)

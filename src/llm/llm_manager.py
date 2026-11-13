@@ -135,7 +135,8 @@ class LLMManager:
                 "num_thread": self._num_thread,
             },
         }
-        timeout = aiohttp.ClientTimeout(total=45, connect=3.0)
+        # ✅ MODIFICAÇÃO AQUI — Tempo limite aumentado de 45s para 180s
+        timeout = aiohttp.ClientTimeout(total=180, connect=5.0)
         
         async with self._semaphore:
             try:

@@ -57,7 +57,7 @@ class KernelConfig:
         },
         "llm": {
             "provider": "ollama",
-            "model": "qwen2.5:7b",
+            "model": "qwen2.5:3b",
             "code_model": "deepseek-coder:6.7b",
             "embedding_model": "nomic-embed-text",
             "ollama": {
@@ -150,18 +150,24 @@ class KernelConfig:
             return self._config
     
     def _merge_with_defaults(self) -> None:
-        """Mescla configuraÃ§Ã£o atual com defaults (para novas chaves)."""
+        """Mescla defaults com a configuracao do usuario."""
         def deep_merge(base: dict, override: dict) -> dict:
             result = base.copy()
+
             for key, value in override.items():
-                if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                if (
+                    key in result
+                    and isinstance(result[key], dict)
+                    and isinstance(value, dict)
+                ):
                     result[key] = deep_merge(result[key], value)
-                elif key not in result:
+                else:
                     result[key] = value
+
             return result
-        
+
         self._config = deep_merge(self.DEFAULT_CONFIG, self._config)
-    
+
     def save(self) -> None:
         """Salva configuraÃ§Ã£o atual no arquivo."""
         self.config_path.parent.mkdir(parents=True, exist_ok=True)

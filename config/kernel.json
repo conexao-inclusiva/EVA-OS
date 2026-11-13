@@ -1,0 +1,125 @@
+{
+  "system": {
+    "name": "EVA OS",
+    "version": "1.0.0",
+    "log_level": "INFO",
+    "log_file": "./data/logs/eva.log"
+  },
+  "paths": {
+    "data": "./data",
+    "models": "./models",
+    "config": "./config",
+    "plugins": "./plugins",
+    "memory": "./data/memory",
+    "knowledge": "./data/knowledge",
+    "logs": "./data/logs",
+    "backups": "./data/backups"
+  },
+  "database": {
+    "postgresql": {
+      "host": "localhost",
+      "port": 5432,
+      "database": "eva",
+      "user": "eva",
+      "password": ""
+    },
+    "qdrant": {
+      "host": "localhost",
+      "port": 6333
+    },
+    "neo4j": {
+      "host": "localhost",
+      "port": 7687,
+      "database": "eva",
+      "user": "neo4j",
+      "password": ""
+    },
+    "redis": {
+      "host": "localhost",
+      "port": 6379
+    }
+  },
+  "llm": {
+    "provider": "ollama",
+    "model": "qwen2.5:3b",
+    "code_model": "deepseek-coder:6.7b",
+    "embedding_model": "nomic-embed-text",
+    "ollama": {
+      "host": "localhost",
+      "port": 11434
+    }
+  },
+  "voice": {
+    "speech_to_text": "whisper",
+    "text_to_speech": "piper",
+    "language": "pt-BR"
+  },
+  "vision": {
+    "enable": true,
+    "model": "yolo",
+    "openvino": {
+      "host": "localhost",
+      "port": 3000
+    }
+  },
+  "network": {
+    "host": "127.0.0.1",
+    "port": 8000,
+    "api_host": "127.0.0.1",
+    "api_port": 8000
+  },
+  "security": {
+    "enable_authentication": true,
+    "enable_encryption": true,
+    "enable_audit": true,
+    "network_monitor": {
+      "enabled": true,
+      "interval_seconds": 30,
+      "timeout_seconds": 3,
+      "failure_threshold": 3,
+      "recovery_threshold": 2,
+      "targets": [
+        {
+          "id": "modem_ping",
+          "host": "192.168.15.1",
+          "action": "ping"
+        },
+        {
+          "id": "nvr_tcp_443",
+          "host": "192.168.15.2",
+          "action": "port",
+          "port": 443
+        },
+        {
+          "id": "nvr_tcp_554",
+          "host": "192.168.15.2",
+          "action": "port",
+          "port": 554
+        }
+      ]
+    }
+  },
+  "home_assistant": {
+    "enable": false,
+    "host": "localhost",
+    "port": 8123,
+    "token": ""
+  },
+  "mikrotik": {
+    "enable": false,
+    "host": "192.168.88.1",
+    "port": 8728,
+    "user": "admin",
+    "password": ""
+  },
+  "resources": {
+    "max_cpu_percent": 80,
+    "max_ram_percent": 85,
+    "max_disk_percent": 90
+  },
+  "features": {
+    "auto_learning": true,
+    "auto_evolution": true,
+    "auto_programming": false
+  }
+}

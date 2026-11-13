@@ -1,0 +1,115 @@
+"""Agente de Aprendizado."""
+
+from typing import Dict, Any, Optional
+
+from src.agents.base_agent import BaseAgent
+from src.kernel.events import EventBus
+
+
+class LearningAgent(BaseAgent):
+    """
+    Agente de Aprendizado.
+    
+    Responsável por:
+    - Estudar novos tópicos
+    - Extrair conhecimento de fontes
+    - Atualizar conhecimento existente
+    - Identificar lacunas de conhecimento
+    """
+    
+    __plugin_name__ = "learning_agent"
+    __plugin_version__ = "1.0.0"
+    __plugin_description__ = "Agente especializado em aprendizado"
+    __plugin_author__ = "EVA OS Team"
+    __plugin_tags__ = ["agent", "learning", "study"]
+    __plugin_capabilities__ = ["learning", "study", "knowledge_acquisition"]
+    __plugin_requires__ = ["event_bus", "logger", "config"]
+    
+    def __init__(self, event_bus: EventBus, logger, config):
+        super().__init__(event_bus, logger, config, name="learning")
+        self.knowledge_manager = None
+        self._learning_topics = []
+        self._current_topic = None
+    
+    async def initialize(self) -> None:
+        """Inicializa o agente."""
+        try:
+            from src.core.service_registry import ServiceRegistry
+            registry = ServiceRegistry()
+            self.knowledge_manager = registry.get("knowledge_manager")
+        except Exception as e:
+            self.logger.warning(f"Não foi possível obter KnowledgeManager: {e}")
+        
+        await super().initialize()
+        self.logger.info("LearningAgent: Pronto para aprender")
+    
+    async def process(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Processa uma tarefa de aprendizado.
+        """
+        task_type = task.get("type", "study")
+        
+        if task_type == "study":
+            return await self._handle_study(task)
+        elif task_type == "topic":
+            return await self._handle_topic(task)
+        elif task_type == "summary":
+            return await self._handle_summary(task)
+        else:
+            return {"error": f"Tipo de tarefa desconhecido: {task_type}"}
+    
+    async def _handle_study(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """Manipula estudo de um tópico."""
+        topic = task.get("topic", "")
+        
+        if not topic:
+            return {"error": "Nenhum tópico fornecido"}
+        
+        self._current_topic = topic
+        self._learning_topics.append(topic)
+        
+        # TODO: Implementar estudo real (integração com internet, LLM, etc.)
+        
+        return {
+            "type": "study",
+            "topic": topic,
+            "status": "studying",
+            "message": f"Iniciando estudo de '{topic}'",
+            "timestamp": __import__('datetime').datetime.now().isoformat()
+        }
+    
+    async def _handle_topic(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """Manipula lista de tópicos."""
+        return {
+            "type": "topic",
+            "topics": self._learning_topics,
+            "current": self._current_topic,
+            "timestamp": __import__('datetime').datetime.now().isoformat()
+        }
+    
+    async def _handle_summary(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """Manipula resumo do aprendizado."""
+        return {
+            "type": "summary",
+            "topics_studied": len(self._learning_topics),
+            "current_topic": self._current_topic,
+            "knowledge_added": 0,  # TODO: Contar conhecimento adicionado
+            "timestamp": __import__('datetime').datetime.now().isoformat()
+        }
+    
+    async def shutdown(self) -> None:
+        """Desliga o agente."""
+        self.logger.info(f"LearningAgent: {len(self._learning_topics)} tópicos estudados")
+        await super().shutdown()
+    
+    async def health_check(self) -> Dict[str, Any]:
+        """Verifica saúde do agente."""
+        health = await super().health_check()
+        health["topics_studied"] = len(self._learning_topics)
+        return health
+    async def start(self) -> None:
+        if self._running:
+            return
+        if not self._initialized:
+            raise RuntimeError("Agente nao inicializado")
+        await super().start()

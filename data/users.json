@@ -17,8 +17,8 @@
     "preferred_response_length": "medio",
     "preferences": {},
     "first_seen": "2026-10-22T07:11:48.914394",
-    "last_seen": "2026-10-22T07:17:53.306753",
-    "interaction_count": 5,
+    "last_seen": "2026-11-13T09:50:18.768589",
+    "interaction_count": 8,
     "facts": []
   },
   "admin": {
@@ -28,8 +28,8 @@
     "preferred_response_length": "medio",
     "preferences": {},
     "first_seen": "2026-10-23T07:54:51.476976",
-    "last_seen": "2026-11-07T11:34:37.844874",
-    "interaction_count": 74,
+    "last_seen": "2026-11-13T11:24:12.128546",
+    "interaction_count": 102,
     "facts": []
   },
   "ALBERTO": {
@@ -52,6 +52,17 @@
     "first_seen": "2026-10-23T17:54:20.995659",
     "last_seen": "2026-10-23T18:08:52.726377",
     "interaction_count": 32,
+    "facts": []
+  },
+  "Alberto": {
+    "name": "Usuário",
+    "preferred_name": null,
+    "preferred_tone": "neutro",
+    "preferred_response_length": "medio",
+    "preferences": {},
+    "first_seen": "2026-11-13T10:36:27.515094",
+    "last_seen": "2026-11-13T10:36:27.515243",
+    "interaction_count": 1,
     "facts": []
   }
 }

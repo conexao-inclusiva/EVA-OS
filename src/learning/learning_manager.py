@@ -39,14 +39,29 @@ class LearningManager:
     __plugin_capabilities__ = ["learning", "pattern_extraction", "feedback", "autonomous_study"]
     __plugin_requires__ = ["event_bus", "logger", "config", "memory_manager", "knowledge_manager"]
     
-    def __init__(self, event_bus: EventBus, logger, config, memory_manager, knowledge_manager):
+    def __init__(self, event_bus: EventBus, logger, config, service_registry=None, memory_manager=None, knowledge_manager=None):
         self.event_bus = event_bus
         self.logger = logger
         self.config = config
-        self.memory_manager = memory_manager
-        self.knowledge_manager = knowledge_manager
         
-        # Componentes
+        # Resolve dependências: se não forem passadas diretamente, busca do registro
+        if memory_manager is not None:
+            self.memory_manager = memory_manager
+        elif service_registry is not None:
+            self.memory_manager = service_registry.get("memory_manager")
+        else:
+            self.memory_manager = None
+            self.logger.warning("MemoryManager não disponível para LearningManager")
+        
+        if knowledge_manager is not None:
+            self.knowledge_manager = knowledge_manager
+        elif service_registry is not None:
+            self.knowledge_manager = service_registry.get("knowledge_manager")
+        else:
+            self.knowledge_manager = None
+            self.logger.warning("KnowledgeManager não disponível para LearningManager")
+        
+        # Componentes — só instancia se as dependências estiverem disponíveis
         self.pattern_extractor = PatternExtractor(self)
         self.knowledge_extractor = KnowledgeExtractor(self)
         self.behavior_analyzer = BehaviorAnalyzer(self)
@@ -86,6 +101,7 @@ class LearningManager:
         self._register_listeners()
         
         self.logger.info("LearningManager inicializado com suporte a estudo autônomo")
+
     
     def _register_listeners(self) -> None:
         """Registra ouvintes de eventos."""

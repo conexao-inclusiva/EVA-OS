@@ -109,6 +109,74 @@ class EVAOS:
         config = core.config
         self._loop = asyncio.get_running_loop()
 
+        success = await self.boot.boot()
+        
+        if not success:
+            print("❌ Falha no boot. Encerrando.")
+            sys.exit(1)
+        
+        core = self.boot.core
+        self.logger = core.logger
+        registry = core.service_registry
+        event_bus = core.event_bus
+        logger = core.logger
+        config = core.config
+        self._loop = asyncio.get_running_loop()
+
+        # ============================================================
+        # ✅ NOVA ETAPA: Registrar Managers essenciais ANTES dos plugins
+        # ============================================================
+        print("🧠 Registrando serviços centrais...")
+        try:
+            # MemoryManager
+            from src.memory.memory_manager import MemoryManager
+            memory_manager = MemoryManager(event_bus, logger, config)
+            await memory_manager.initialize()
+            registry.register("memory_manager", memory_manager)
+            logger.info("✅ memory_manager registrado antecipadamente")
+
+            # KnowledgeManager
+            from src.knowledge.knowledge_manager import KnowledgeManager
+            knowledge_manager = KnowledgeManager(event_bus, logger, config)
+            await knowledge_manager.initialize()
+            registry.register("knowledge_manager", knowledge_manager)
+            logger.info("✅ knowledge_manager registrado antecipadamente")
+
+            # PlannerManager
+            from src.planner.planner_manager import PlannerManager
+            planner_manager = PlannerManager(event_bus, logger, config)
+            await planner_manager.initialize()
+            registry.register("planner_manager", planner_manager)
+            logger.info("✅ planner_manager registrado antecipadamente")
+
+            # ⚡ Recarrega os plugins que falharam por falta de dependências
+            plugin_manager = core.plugin_manager
+            failed_plugins = [
+                "consciousness_manager",
+                "learning_manager",
+                "memory_agent",
+                "planner_agent",
+                "evolution_manager",
+                "conversation_archive",
+                "conversation_coordinator",
+                "turn_state_manager",
+            ]
+            
+            print("🔄 Recarregando plugins com dependências resolvidas...")
+            for plugin_name in failed_plugins:
+                plugin_id = plugin_manager._plugins_by_name.get(plugin_name)
+                plugin = plugin_manager._plugins.get(plugin_id)
+                if plugin and plugin.status.value == "failed":
+                    logger.info(f"🔄 Tentando recarregar: {plugin_name}")
+                    success = await plugin_manager._load_plugin(plugin)
+                    if success:
+                        logger.info(f"✅ {plugin_name} carregado com sucesso")
+                    else:
+                        logger.warning(f"⚠️ {plugin_name} ainda falhou: {plugin.error}")
+        except Exception as e:
+            logger.warning(f"⚠️ Erro ao registrar serviços centrais: {e}")
+        # ============================================================
+
         # ============================================================
         # Obtém o LifecycleManager do core (já deve existir)
         # ============================================================

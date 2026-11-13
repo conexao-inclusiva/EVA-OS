@@ -1,5 +1,5 @@
 {
-  "current_mood": "neutro",
+  "current_mood": "curioso",
   "current_sentiment": 0.0,
   "current_energy": 1.0,
   "current_tone": {
@@ -10,85 +10,7 @@
   },
   "emotion_history": [
     {
-      "timestamp": "2026-11-05T10:27:49.989880",
-      "user_sentiment": 0.0,
-      "user_mood": "neutro",
-      "eva_mood": "curioso",
-      "eva_energy": 1.0,
-      "tone": {
-        "energy": "neutral",
-        "intimacy": "medium",
-        "formality": "medium",
-        "style": "casual"
-      }
-    },
-    {
-      "timestamp": "2026-11-05T10:27:58.220591",
-      "user_sentiment": 0.0,
-      "user_mood": "neutro",
-      "eva_mood": "curioso",
-      "eva_energy": 1.0,
-      "tone": {
-        "energy": "neutral",
-        "intimacy": "medium",
-        "formality": "medium",
-        "style": "casual"
-      }
-    },
-    {
-      "timestamp": "2026-11-05T10:28:07.406533",
-      "user_sentiment": 0.0,
-      "user_mood": "neutro",
-      "eva_mood": "curioso",
-      "eva_energy": 1.0,
-      "tone": {
-        "energy": "neutral",
-        "intimacy": "medium",
-        "formality": "medium",
-        "style": "casual"
-      }
-    },
-    {
-      "timestamp": "2026-11-05T10:28:20.483528",
-      "user_sentiment": 0.0,
-      "user_mood": "neutro",
-      "eva_mood": "curioso",
-      "eva_energy": 1.0,
-      "tone": {
-        "energy": "neutral",
-        "intimacy": "medium",
-        "formality": "medium",
-        "style": "casual"
-      }
-    },
-    {
-      "timestamp": "2026-11-05T10:28:30.230516",
-      "user_sentiment": 0.0,
-      "user_mood": "neutro",
-      "eva_mood": "curioso",
-      "eva_energy": 1.0,
-      "tone": {
-        "energy": "neutral",
-        "intimacy": "medium",
-        "formality": "medium",
-        "style": "casual"
-      }
-    },
-    {
-      "timestamp": "2026-11-05T10:28:41.015962",
-      "user_sentiment": 0.0,
-      "user_mood": "neutro",
-      "eva_mood": "curioso",
-      "eva_energy": 1.0,
-      "tone": {
-        "energy": "neutral",
-        "intimacy": "medium",
-        "formality": "medium",
-        "style": "casual"
-      }
-    },
-    {
-      "timestamp": "2026-11-05T12:42:06.214787",
+      "timestamp": "2026-11-13T09:49:13.259934",
       "user_sentiment": 0.0,
       "user_mood": "curious",
       "eva_mood": "curioso",
@@ -101,7 +23,20 @@
       }
     },
     {
-      "timestamp": "2026-11-07T08:03:03.924484",
+      "timestamp": "2026-11-13T09:50:18.804489",
+      "user_sentiment": 0.0,
+      "user_mood": "neutro",
+      "eva_mood": "curioso",
+      "eva_energy": 1.0,
+      "tone": {
+        "energy": "neutral",
+        "intimacy": "medium",
+        "formality": "medium",
+        "style": "casual"
+      }
+    },
+    {
+      "timestamp": "2026-11-13T10:09:31.043917",
       "user_sentiment": 0.9090909090909091,
       "user_mood": "positive",
       "eva_mood": "feliz",
@@ -114,10 +49,10 @@
       }
     },
     {
-      "timestamp": "2026-11-07T08:04:30.253628",
+      "timestamp": "2026-11-13T10:10:50.331918",
       "user_sentiment": 0.0,
-      "user_mood": "neutro",
-      "eva_mood": "neutro",
+      "user_mood": "curious",
+      "eva_mood": "curioso",
       "eva_energy": 1.0,
       "tone": {
         "energy": "neutral",
@@ -127,10 +62,75 @@
       }
     },
     {
-      "timestamp": "2026-11-07T11:34:37.891040",
+      "timestamp": "2026-11-13T10:36:27.569107",
       "user_sentiment": 0.0,
       "user_mood": "neutro",
-      "eva_mood": "neutro",
+      "eva_mood": "curioso",
+      "eva_energy": 1.0,
+      "tone": {
+        "energy": "neutral",
+        "intimacy": "medium",
+        "formality": "medium",
+        "style": "casual"
+      }
+    },
+    {
+      "timestamp": "2026-11-13T11:20:46.758641",
+      "user_sentiment": 0.0,
+      "user_mood": "neutro",
+      "eva_mood": "curioso",
+      "eva_energy": 1.0,
+      "tone": {
+        "energy": "neutral",
+        "intimacy": "medium",
+        "formality": "medium",
+        "style": "casual"
+      }
+    },
+    {
+      "timestamp": "2026-11-13T11:21:42.835324",
+      "user_sentiment": 0.0,
+      "user_mood": "neutro",
+      "eva_mood": "curioso",
+      "eva_energy": 1.0,
+      "tone": {
+        "energy": "neutral",
+        "intimacy": "medium",
+        "formality": "medium",
+        "style": "casual"
+      }
+    },
+    {
+      "timestamp": "2026-11-13T11:23:34.362059",
+      "user_sentiment": 0.0,
+      "user_mood": "neutro",
+      "eva_mood": "curioso",
+      "eva_energy": 1.0,
+      "tone": {
+        "energy": "neutral",
+        "intimacy": "medium",
+        "formality": "medium",
+        "style": "casual"
+      }
+    },
+    {
+      "timestamp": "2026-11-13T11:23:53.020818",
+      "user_sentiment": 0.0,
+      "user_mood": "neutro",
+      "eva_mood": "curioso",
+      "eva_energy": 1.0,
+      "tone": {
+        "energy": "neutral",
+        "intimacy": "medium",
+        "formality": "medium",
+        "style": "casual"
+      }
+    },
+    {
+      "timestamp": "2026-11-13T11:24:12.160990",
+      "user_sentiment": 0.0,
+      "user_mood": "neutro",
+      "eva_mood": "curioso",
       "eva_energy": 1.0,
       "tone": {
         "energy": "neutral",
@@ -141,8 +141,8 @@
     }
   ],
   "last_interaction": {
-    "timestamp": "2026-11-07T11:34:37.891031",
-    "message": "eva abra o jellyfin",
+    "timestamp": "2026-11-13T11:24:12.160984",
+    "message": "evaeva encerrar sistema",
     "sentiment": 0.0,
     "mood": "neutro",
     "tone": {
@@ -152,5 +152,5 @@
       "style": "casual"
     }
   },
-  "updated_at": "2026-11-09T20:26:39.677602"
+  "updated_at": "2026-11-13T11:24:15.122044"
 }

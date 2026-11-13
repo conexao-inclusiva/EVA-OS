@@ -1,0 +1,421 @@
+"""Boot - O maestro da EVA. Inicializa todo o sistema."""
+
+import asyncio
+import sys
+import signal
+from pathlib import Path
+from typing import Optional, List
+from datetime import datetime
+
+from src.kernel.config import KernelConfig
+from src.kernel.logger import KernelLogger
+from src.core import Core, SystemState, PluginStatus
+
+
+class Boot:
+    """
+    O maestro da EVA.
+    Única responsabilidade: Inicializar a EVA.
+    Não executa IA, não executa agentes, não sabe memória.
+    Apenas inicia.
+    """
+    
+    def __init__(self, config_path: Optional[Path] = None):
+        self.config_path = config_path or Path("./config/kernel.json")
+        
+        # Componentes
+        self.config: Optional[KernelConfig] = None
+        self.logger: Optional[KernelLogger] = None
+        self.core: Optional[Core] = None
+        
+        # Estado
+        self._boot_state = "OFFLINE"
+        self._start_time: Optional[datetime] = None
+        self._is_shutting_down = False
+        
+        # Módulos carregados
+        self._loaded_modules: List[str] = []
+    
+    def _print_banner(self) -> None:
+        """Exibe banner de inicialização."""
+        banner = """
+╔══════════════════════════════════════════════╗
+║                                              ║
+║   ███████╗██╗   ██╗ █████╗     ██████╗ ███████╗
+║   ██╔════╝██║   ██║██╔══██╗   ██╔═══██╗██╔════╝
+║   █████╗  ██║   ██║███████║   ██║   ██║███████╗
+║   ██╔══╝  ╚██╗ ██╔╝██╔══██║   ██║   ██║╚════██║
+║   ███████╗ ╚████╔╝ ██║  ██║   ╚██████╔╝███████║
+║   ╚══════╝  ╚═══╝  ╚═╝  ╚═╝    ╚═════╝ ╚══════╝
+║                                              ║
+║         Evolutionary Virtual Assistant       ║
+║                   v1.0.0                     ║
+║                                              ║
+╚══════════════════════════════════════════════╝
+        """
+        print(banner)
+    
+    def _print_boot_progress(self, step: str, status: str = "✓") -> None:
+        """Exibe progresso do boot."""
+        print(f"  {status} {step}")
+    
+    def _set_boot_state(self, state: str) -> None:
+        """Atualiza estado do boot."""
+        self._boot_state = state
+        if self.logger:
+            self.logger.debug(f"Boot state: {state}")
+    
+    async def boot(self) -> bool:
+        """
+        Executa toda a sequência de inicialização.
+        Retorna True se bem-sucedido.
+        """
+        self._start_time = datetime.now()
+        self._is_shutting_down = False
+        
+        # Banner
+        self._print_banner()
+        print("=" * 50)
+        print(f"EVA OS v1.0")
+        print(f"Iniciando em: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print("=" * 50)
+        print()
+        
+        try:
+            # ====== 1. CONFIGURAÇÃO ======
+            self._set_boot_state("LOADING_CONFIG")
+            self._print_boot_progress("Carregando configurações...")
+            
+            self.config = KernelConfig(self.config_path)
+            self.config.load()
+            
+            # ====== 2. LOGGER ======
+            self._set_boot_state("INITIALIZING_LOGGER")
+            self._print_boot_progress("Inicializando Logger...")
+            
+            self.logger = KernelLogger(self.config)
+            self.logger.info("=" * 50)
+            self.logger.info("EVA OS v1.0 - Inicializando")
+            self.logger.info("=" * 50)
+            
+            # ====== 3. CORE ======
+            self._set_boot_state("INITIALIZING_CORE")
+            self._print_boot_progress("Inicializando Core...")
+            
+            self.core = Core(self.logger, self.config)
+            await self.core.initialize()
+            
+            # ====== 4. EVENT BUS ======
+            self._set_boot_state("STARTING_EVENT_BUS")
+            self._print_boot_progress("Iniciando EventBus...")
+            
+            # Já foi iniciado pelo Core
+            self.logger.info("EventBus ativo")
+            
+            # ====== 5. SERVICE REGISTRY ======
+            self._set_boot_state("STARTING_SERVICE_REGISTRY")
+            self._print_boot_progress("Iniciando Service Registry...")
+            
+            # Já foi iniciado pelo Core
+            self.logger.info("Service Registry ativo")
+            
+            # ====== 6. PLUGIN MANAGER - ADICIONAR CAMINHOS ======
+            self._set_boot_state("CONFIGURING_PLUGIN_MANAGER")
+            self._print_boot_progress("Configurando Plugin Manager...")
+            
+            # Adiciona caminhos para scanear
+            self.core.plugin_manager.add_scan_path(Path("./src/consciousness"))
+            self.core.plugin_manager.add_scan_path(Path("./src/planner"))
+            self.core.plugin_manager.add_scan_path(Path("./src/memory"))
+            self.core.plugin_manager.add_scan_path(Path("./src/knowledge"))
+            self.core.plugin_manager.add_scan_path(Path("./src/agents"))
+            self.core.plugin_manager.add_scan_path(Path("./src/tools"))
+            self.core.plugin_manager.add_scan_path(Path("./src/security"))
+            self.core.plugin_manager.add_scan_path(Path("./src/context"))
+            self.core.plugin_manager.add_scan_path(Path("./src/interfaces"))
+            self.core.plugin_manager.add_scan_path(Path("./src/api"))
+            self.core.plugin_manager.add_scan_path(Path("./src/personality"))
+            self.core.plugin_manager.add_scan_path(Path("./src/learning"))
+            self.core.plugin_manager.add_scan_path(Path("./src/evolution"))
+            self.core.plugin_manager.add_scan_path(Path("./src/hardware"))
+            
+            # Adiciona padrões de exclusão
+            self.core.plugin_manager.add_exclude_pattern("__pycache__")
+            self.core.plugin_manager.add_exclude_pattern("tests")
+            self.core.plugin_manager.add_exclude_pattern("test")
+            self.core.plugin_manager.add_exclude_pattern("venv")
+            self.core.plugin_manager.add_exclude_pattern(".venv")
+            self.core.plugin_manager.add_exclude_pattern("env")
+            self.core.plugin_manager.add_exclude_pattern(".git")
+            self.core.plugin_manager.add_exclude_pattern(".idea")
+            self.core.plugin_manager.add_exclude_pattern(".vscode")
+            self.core.plugin_manager.add_exclude_pattern("node_modules")
+            self.core.plugin_manager.add_exclude_pattern("dist")
+            self.core.plugin_manager.add_exclude_pattern("build")
+            self.core.plugin_manager.add_exclude_pattern("__init__.py")
+            
+            self.logger.info("Plugin Manager configurado")
+            
+            # ====== 7. SCANEAR PLUGINS ======
+            self._set_boot_state("SCANNING_PLUGINS")
+            self._print_boot_progress("Escaneando plugins...")
+            
+            plugins = await self.core.plugin_manager.scan()
+            
+            self.logger.info(f"Plugins encontrados: {len(plugins)}")
+            
+            # ====== 8. CARREGAR PLUGINS ======
+            self._set_boot_state("LOADING_PLUGINS")
+            self._print_boot_progress("Carregando plugins...")
+            
+            results = await self.core.plugin_manager.load_all()
+            
+            loaded_count = sum(1 for success in results.values() if success)
+            self.logger.info(f"Plugins carregados: {loaded_count}/{len(results)}")
+            
+            # Atualiza lista de módulos carregados
+            self._loaded_modules = [
+                p.manifest.name for p in self.core.plugin_manager.get_plugins()
+                if p.status in [PluginStatus.LOADED, PluginStatus.INITIALIZED, PluginStatus.STARTED]
+            ]
+            
+            # ====== 9. REGISTRAR SERVIÇOS ADICIONAIS ======
+            self._set_boot_state("REGISTERING_SERVICES")
+            self._print_boot_progress("Registrando serviços...")
+            
+            # Registra serviços do Kernel
+            self.core.service_registry.register("kernel_boot", self)
+            self.core.service_registry.register("kernel_config", self.config)
+            self.core.service_registry.register("kernel_logger", self.logger)
+            
+            services = self.core.service_registry.list()
+            self.logger.info(f"Serviços registrados: {len(services)}")
+            
+            # ====== 10. HEALTH CHECK ======
+            self._set_boot_state("CHECKING_HEALTH")
+            self._print_boot_progress("Verificando saúde do sistema...")
+            
+            health = await self.core.health_manager.check()
+            
+            # Verifica se tudo está ok
+            cpu_ok = not health.get("cpu", {}).get("warning", False)
+            ram_ok = not health.get("ram", {}).get("warning", False)
+            disk_ok = not health.get("disk", {}).get("warning", False)
+            
+            if cpu_ok and ram_ok and disk_ok:
+                self.logger.info("Health Check: OK")
+                self._print_boot_progress("Health Check: OK", "✓")
+            else:
+                warnings = []
+                if not cpu_ok:
+                    warnings.append(f"CPU: {health['cpu'].get('percent')}%")
+                if not ram_ok:
+                    warnings.append(f"RAM: {health['ram'].get('percent')}%")
+                if not disk_ok:
+                    warnings.append(f"DISK: {health['disk'].get('percent')}%")
+                self.logger.warning(f"Health Check: Alertas - {', '.join(warnings)}")
+                self._print_boot_progress(f"Health Check: Alertas - {', '.join(warnings)}", "⚠")
+            
+            # ====== 11. MUDAR ESTADO PARA IDLE ======
+            self._set_boot_state("READY")
+            
+            self.core.state_manager.set_state(
+                SystemState.IDLE,
+                reason="Sistema inicializado com sucesso",
+                source="kernel",
+                data={
+                    "version": "1.0.0",
+                    "plugins": len(self._loaded_modules),
+                    "boot_time": self._start_time.isoformat()
+                }
+            )
+            
+            # ====== 12. PUBLICAR SYSTEM_READY ======
+            self._set_boot_state("SYSTEM_READY")
+            
+            await self.core.event_bus.publish_async(
+                "SYSTEM_READY",
+                {
+                    "version": "1.0.0",
+                    "plugins": self._loaded_modules,
+                    "started_at": self._start_time.isoformat()
+                },
+                source="kernel"
+            )
+            
+            self.logger.info("SYSTEM_READY publicado")
+            
+            # ====== 13. EXECUTAR TAREFAS DE STARTUP ======
+            if hasattr(self.core, 'scheduler'):
+                self._set_boot_state("RUNNING_STARTUP_TASKS")
+                self._print_boot_progress("Executando tarefas de startup...")
+                self.core.scheduler.run_startup_tasks()
+            
+            # ====== 14. FINALIZADO ======
+            self._set_boot_state("IDLE")
+            
+            boot_time = (datetime.now() - self._start_time).total_seconds()
+            
+            print()
+            print("=" * 50)
+            print(f"✅ EVA OS v1.0 - Inicializado com sucesso!")
+            print(f"   Tempo de boot: {boot_time:.2f}s")
+            print(f"   Plugins: {len(self._loaded_modules)}")
+            print(f"   Estado: {self.core.state_manager.get_state_name()}")
+            print("=" * 50)
+            print()
+            print("   Aguardando eventos...")
+            print()
+            print("=" * 50)
+            
+            self.logger.info(f"Boot concluído em {boot_time:.2f}s")
+            self.logger.info(f"Estado: {self.core.state_manager.get_state_name()}")
+            
+            # ====== 15. REGISTRA NO WATCHDOG ======
+            if hasattr(self.core, 'health_manager'):
+                self.core.health_manager.register_module("kernel", self)
+            
+            return True
+            
+        except Exception as e:
+            self._set_boot_state("ERROR")
+            
+            print()
+            print("=" * 50)
+            print(f"❌ ERRO durante o boot: {e}")
+            print("=" * 50)
+            
+            if self.logger:
+                self.logger.error(f"Boot falhou: {e}")
+                self.logger.exception(e)
+            
+            # Tenta entrar em modo de erro
+            if self.core:
+                self.core.state_manager.set_state(
+                    SystemState.ERROR,
+                    reason=f"Boot falhou: {e}",
+                    source="kernel"
+                )
+            
+            return False
+    
+    async def shutdown(self) -> None:
+        """Desliga a EVA de forma segura."""
+        if self._is_shutting_down:
+            return
+        
+        self._is_shutting_down = True
+        
+        self.logger.info("=" * 50)
+        self.logger.info("EVA OS - Desligando...")
+        self.logger.info("=" * 50)
+        
+        print()
+        print("=" * 50)
+        print("Desligando EVA OS...")
+        print("=" * 50)
+        
+        # Executa tarefas de shutdown
+        if hasattr(self.core, 'scheduler'):
+            await self.core.scheduler.run_shutdown_tasks()
+        
+        # Publica evento de desligamento
+        if self.core:
+            await self.core.event_bus.publish_async(
+                "SYSTEM_SHUTDOWN",
+                {"reason": "Desligamento solicitado"},
+                source="kernel"
+            )
+            
+            # Muda estado
+            self.core.state_manager.set_state(
+                SystemState.SHUTDOWN,
+                reason="Desligamento",
+                source="kernel"
+            )
+            
+            # Desliga Core
+            await self.core.shutdown()
+        
+        if self.logger:
+            self.logger.info("EVA OS desligado")
+        
+        print("✅ EVA OS desligado com sucesso")
+        print("=" * 50)
+    
+    async def restart(self) -> bool:
+        """Reinicia a EVA."""
+        self.logger.info("Reiniciando EVA OS...")
+        
+        print()
+        print("=" * 50)
+        print("Reiniciando EVA OS...")
+        print("=" * 50)
+        
+        await self.shutdown()
+        
+        # Aguarda um momento
+        await asyncio.sleep(2)
+        
+        # Reinicia
+        return await self.boot()
+    
+    async def safe_mode(self) -> bool:
+        """Inicia em modo seguro (apenas Core)."""
+        self._print_boot_progress("Modo seguro ativado", "⚠")
+        self.logger.warning("Iniciando em modo seguro (Core apenas)")
+        
+        try:
+            self.config = KernelConfig(self.config_path)
+            self.config.load()
+            
+            self.logger = KernelLogger(self.config)
+            
+            self.core = Core(self.logger, self.config)
+            await self.core.initialize()
+            
+            self.core.state_manager.set_state(
+                SystemState.IDLE,
+                reason="Modo seguro",
+                source="kernel"
+            )
+            
+            print()
+            print("=" * 50)
+            print("⚠ Modo Seguro ativo")
+            print("   Apenas Core carregado")
+            print("   Plugins desativados")
+            print("=" * 50)
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Erro no modo seguro: {e}")
+            return False
+    
+    def get_boot_state(self) -> str:
+        """Obtém estado atual do boot."""
+        return self._boot_state
+    
+    def get_boot_info(self) -> dict:
+        """Obtém informações do boot."""
+        return {
+            "state": self._boot_state,
+            "start_time": self._start_time.isoformat() if self._start_time else None,
+            "plugins": self._loaded_modules,
+            "plugin_count": len(self._loaded_modules),
+            "core_initialized": self.core is not None
+        }
+    
+    def get_loaded_modules(self) -> List[str]:
+        """Obtém lista de módulos carregados."""
+        return self._loaded_modules.copy()
+    
+    async def health_check(self) -> dict:
+        """Health check do Boot."""
+        return {
+            "status": "alive" if self._boot_state != "ERROR" else "error",
+            "boot_state": self._boot_state,
+            "uptime": (datetime.now() - self._start_time).total_seconds() if self._start_time else 0,
+            "plugins": len(self._loaded_modules)
+        }

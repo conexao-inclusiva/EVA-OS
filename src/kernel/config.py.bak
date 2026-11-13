@@ -1,4 +1,4 @@
-"""Gerenciador de configuração do Kernel."""
+"""Gerenciador de configuraÃ§Ã£o do Kernel."""
 
 import json
 import os
@@ -9,11 +9,11 @@ from datetime import datetime
 
 class KernelConfig:
     """
-    Toda configuração da EVA passa por aqui.
+    Toda configuraÃ§Ã£o da EVA passa por aqui.
     Nunca: HOST="localhost" espalhado pelo projeto.
     """
     
-    # Configuração padrão
+    # ConfiguraÃ§Ã£o padrÃ£o
     DEFAULT_CONFIG = {
         "system": {
             "name": "EVA OS",
@@ -57,7 +57,7 @@ class KernelConfig:
         },
         "llm": {
             "provider": "ollama",
-            "model": "qwen:7b",
+            "model": "qwen2.5:7b",
             "code_model": "deepseek-coder:6.7b",
             "embedding_model": "nomic-embed-text",
             "ollama": {
@@ -122,8 +122,8 @@ class KernelConfig:
     
     def load(self) -> Dict[str, Any]:
         """
-        Carrega configuração do arquivo.
-        Se não existir, cria com valores padrão.
+        Carrega configuraÃ§Ã£o do arquivo.
+        Se nÃ£o existir, cria com valores padrÃ£o.
         """
         if self.config_path.exists():
             try:
@@ -137,7 +137,7 @@ class KernelConfig:
                 
                 return self._config
             except Exception as e:
-                print(f"Erro ao carregar configuração: {e}")
+                print(f"Erro ao carregar configuraÃ§Ã£o: {e}")
                 self._config = self.DEFAULT_CONFIG.copy()
                 self._loaded_at = datetime.now()
                 self.save()
@@ -150,7 +150,7 @@ class KernelConfig:
             return self._config
     
     def _merge_with_defaults(self) -> None:
-        """Mescla configuração atual com defaults (para novas chaves)."""
+        """Mescla configuraÃ§Ã£o atual com defaults (para novas chaves)."""
         def deep_merge(base: dict, override: dict) -> dict:
             result = base.copy()
             for key, value in override.items():
@@ -163,7 +163,7 @@ class KernelConfig:
         self._config = deep_merge(self.DEFAULT_CONFIG, self._config)
     
     def save(self) -> None:
-        """Salva configuração atual no arquivo."""
+        """Salva configuraÃ§Ã£o atual no arquivo."""
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         
         try:
@@ -171,21 +171,21 @@ class KernelConfig:
                 json.dump(self._config, f, indent=2, ensure_ascii=False)
             self._modified = False
         except Exception as e:
-            print(f"Erro ao salvar configuração: {e}")
+            print(f"Erro ao salvar configuraÃ§Ã£o: {e}")
     
     def reload(self) -> None:
-        """Recarrega configuração do arquivo."""
+        """Recarrega configuraÃ§Ã£o do arquivo."""
         self.load()
     
     def validate(self) -> List[str]:
-        """Valida a configuração. Retorna lista de erros."""
+        """Valida a configuraÃ§Ã£o. Retorna lista de erros."""
         errors = []
         
-        # Verifica campos obrigatórios
+        # Verifica campos obrigatÃ³rios
         required = [
-            ("system.name", "Nome do sistema não definido"),
-            ("system.version", "Versão do sistema não definida"),
-            ("paths.data", "Caminho de dados não definido")
+            ("system.name", "Nome do sistema nÃ£o definido"),
+            ("system.version", "VersÃ£o do sistema nÃ£o definida"),
+            ("paths.data", "Caminho de dados nÃ£o definido")
         ]
         
         for key, msg in required:
@@ -195,7 +195,7 @@ class KernelConfig:
         # Verifica LLM
         llm_provider = self.get("llm.provider")
         if llm_provider not in ["ollama", "openai", "anthropic", "local"]:
-            errors.append(f"Provedor LLM inválido: {llm_provider}")
+            errors.append(f"Provedor LLM invÃ¡lido: {llm_provider}")
         
         # Verifica paths existem
         for path_key in ["data", "logs", "models"]:
@@ -206,14 +206,14 @@ class KernelConfig:
                     try:
                         p.mkdir(parents=True, exist_ok=True)
                     except Exception:
-                        errors.append(f"Não foi possível criar diretório: {path}")
+                        errors.append(f"NÃ£o foi possÃ­vel criar diretÃ³rio: {path}")
         
         return errors
     
     def get(self, key: str, default: Any = None) -> Any:
         """
-        Obtém um valor de configuração.
-        Suporta notação de pontos: "system.name"
+        ObtÃ©m um valor de configuraÃ§Ã£o.
+        Suporta notaÃ§Ã£o de pontos: "system.name"
         """
         keys = key.split(".")
         value = self._config
@@ -231,13 +231,13 @@ class KernelConfig:
     
     def set(self, key: str, value: Any) -> None:
         """
-        Define um valor de configuração.
-        Suporta notação de pontos: "system.name"
+        Define um valor de configuraÃ§Ã£o.
+        Suporta notaÃ§Ã£o de pontos: "system.name"
         """
         keys = key.split(".")
         target = self._config
         
-        # Navega até o último nível
+        # Navega atÃ© o Ãºltimo nÃ­vel
         for k in keys[:-1]:
             if k not in target:
                 target[k] = {}
@@ -248,23 +248,23 @@ class KernelConfig:
         self._modified = True
     
     def get_all(self) -> Dict[str, Any]:
-        """Obtém toda a configuração."""
+        """ObtÃ©m toda a configuraÃ§Ã£o."""
         return self._config.copy()
     
     def get_section(self, section: str) -> Dict[str, Any]:
-        """Obtém uma seção da configuração."""
+        """ObtÃ©m uma seÃ§Ã£o da configuraÃ§Ã£o."""
         return self._config.get(section, {})
     
     def is_modified(self) -> bool:
-        """Verifica se a configuração foi modificada."""
+        """Verifica se a configuraÃ§Ã£o foi modificada."""
         return self._modified
     
     def get_load_time(self) -> Optional[datetime]:
-        """Obtém o horário de carregamento."""
+        """ObtÃ©m o horÃ¡rio de carregamento."""
         return self._loaded_at
     
     def export_env(self) -> Dict[str, str]:
-        """Exporta configuração como variáveis de ambiente."""
+        """Exporta configuraÃ§Ã£o como variÃ¡veis de ambiente."""
         env = {}
         
         def flatten(obj: dict, prefix: str = "") -> None:
@@ -279,7 +279,7 @@ class KernelConfig:
         return env
     
     def apply_env(self) -> None:
-        """Aplica variáveis de ambiente sobre a configuração."""
+        """Aplica variÃ¡veis de ambiente sobre a configuraÃ§Ã£o."""
         for key, value in os.environ.items():
             if key.startswith("EVA_"):
                 config_key = key[4:].lower().replace("_", ".")
